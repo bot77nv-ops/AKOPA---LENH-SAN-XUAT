@@ -1,0 +1,6 @@
+{
+  "name": "Lệnh Sản Xuất Đồng Phục AKOPA",
+  "description": "Ứng dụng quản lý lệnh sản xuất đơn hàng cho Đồng phục AKOPA, tích hợp Google Drive.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

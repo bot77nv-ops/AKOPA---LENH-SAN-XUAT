@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+.production-order-preview {
+  width: 210mm;
+  min-height: 297mm;
+  background: white;
+  padding: 20mm;
+  box-sizing: border-box;
+  color: #000;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .production-order-preview {
+    box-shadow: none;
+    margin: 0;
+    width: auto;
+    padding: 0;
+    min-height: auto;
+  }
+}
