@@ -256,17 +256,19 @@ const TONE={'Mới':'info','Chờ duyệt mẫu':'warn','Đã duyệt mẫu':'in
 const DONE=['Đã giao','Hoàn tất','Hủy'];
 const STAGES=['Chuẩn bị NVL / phôi','May','In / Thêu','Kiểm hàng (QC)','Đóng gói'];
 /* Nguồn hàng từng mẫu áo → các bước sản xuất của đơn */
-const SUPPLY={self:'Xưởng AKOPA tự may',buy:'Mua áo có sẵn',oem:'Đặt may OEM'};
-const PO_KIND={buy:{title:'PHIẾU ĐẶT MUA ÁO',short:'Mua áo có sẵn',suf:'MH'},oem:{title:'ĐƠN ĐẶT MAY OEM',short:'Đặt may OEM',suf:'OEM'}};
+const SUPPLY={self:'Xưởng AKOPA tự may',buy:'Mua áo có sẵn',oem:'Đặt may OEM (về AKOPA in)',oemfull:'OEM trọn gói (may + in/thêu)'};
+const PO_KIND={buy:{title:'PHIẾU ĐẶT MUA ÁO',short:'Mua áo có sẵn',suf:'MH'},oem:{title:'ĐƠN ĐẶT MAY OEM',short:'Đặt may OEM',suf:'OEM'},oemfull:{title:'ĐƠN ĐẶT OEM TRỌN GÓI (MAY + IN/THÊU)',short:'OEM trọn gói',suf:'OEMTG'}};
 const DEF_KEYS=['prep','sew','print','qc','pack'];
-function buildStages(o){const m=new Set(o.items.map(i=>i.supply||'self'));const ext=m.has('buy')||m.has('oem');const k=[];if(ext)k.push('purchase');if(m.has('self'))k.push('prep','sew');if(ext)k.push('receive');k.push('print','qc','pack');return k}
+function buildStages(o){const m=new Set(o.items.map(i=>i.supply||'self'));const ext=m.has('buy')||m.has('oem')||m.has('oemfull');const needPrint=[...m].some(x=>x!=='oemfull');const k=[];if(ext)k.push('purchase');if(m.has('self'))k.push('prep','sew');if(ext)k.push('receive');if(needPrint)k.push('print');k.push('qc','pack');return k}
 const SGK=o=>o.prod?(Array.isArray(o.prod.stageKeys)?o.prod.stageKeys:DEF_KEYS):buildStages(o);
 function stageLabel(o,k){const m=new Set(o.items.map(i=>i.supply||'self'));
-  if(k==='purchase')return m.has('buy')&&m.has('oem')?'Mua hàng & đặt OEM (kế toán)':m.has('oem')?'Đặt may OEM (kế toán)':'Mua áo có sẵn (kế toán)';
+  const oe=m.has('oem')||m.has('oemfull');
+  if(k==='purchase')return m.has('buy')&&oe?'Mua hàng & đặt OEM (kế toán)':oe?'Đặt OEM (kế toán)':'Mua áo có sẵn (kế toán)';
+  if(k==='receive'&&m.size===1&&m.has('oemfull'))return 'Nhận thành phẩm OEM & kiểm';
   return{prep:'Chuẩn bị NVL / phôi',sew:'May',receive:'Nhận hàng & kiểm phôi',print:'In / Thêu',qc:'Kiểm hàng (QC)',pack:'Đóng gói'}[k]||k}
 const SG=o=>SGK(o).map(k=>stageLabel(o,k));
 const curKey=o=>o.prod?SGK(o)[o.prod.stage]:'';
-const poModes=o=>['buy','oem'].filter(m=>o.items.some(i=>(i.supply||'self')===m));
+const poModes=o=>['buy','oem','oemfull'].filter(m=>o.items.some(i=>(i.supply||'self')===m));
 function supplyLabel(o){const P=o.prod||{};const ms=[...new Set(o.items.map(i=>i.supply||'self'))];if(P.mode==='outsource'&&!P.stageKeys)return'Gia công: '+esc(P.factory||'—');return ms.map(m=>SUPPLY[m]).join(' + ')}
 function purchState(o,m){const g=o.purchase&&o.purchase[m]||{};return g.status||'todo'}
 const PST={todo:'Chưa đặt',ordered:'Đã đặt',received:'Hàng đã về'};
@@ -364,7 +366,7 @@ function billZone(boxId,arr){const addF=async fs=>{await uploadInto(arr,fs);draw
   draw();sheetPaste=addF}
 function poItems(o,m){return o.items.filter(i=>(i.supply||'self')===m)}
 function poText(o,m){const g=(o.purchase&&o.purchase[m])||{};const its=poItems(o,m);const K=PO_KIND[m];
-  return `${K.title} – ${o.code}-${K.suf}\nAKOPA UNIFORM gửi ${g.supplier||'quý đối tác'}:\n`+its.map((it,i)=>`${i+1}. ${it.product} · ${it.fabric}${it.color?' · màu '+it.color:''}\n   Size: ${SIZES.filter(z=>num(it.sizes[z])).map(z=>z+'×'+num(it.sizes[z])).join(', ')}${num(it.extraQty)?', khác×'+num(it.extraQty):''}${it.sizeNote?' ('+it.sizeNote+')':''}\n   Tổng: ${itemQty(it)} áo`).join('\n')+`\nTổng cộng: ${its.reduce((s,i)=>s+itemQty(i),0)} áo${g.eta||o.prod&&o.prod.due?`\nCần hàng trước: ${dmy(g.eta||o.prod.due)}`:''}${g.note?'\nGhi chú: '+g.note:''}\nXác nhận giúp AKOPA giá & ngày giao. Cảm ơn!`}
+  return `${K.title} – ${o.code}-${K.suf}\nAKOPA UNIFORM gửi ${g.supplier||'quý đối tác'}:\n`+its.map((it,i)=>`${i+1}. ${it.product} · ${it.fabric}${it.color?' · màu '+it.color:''}\n   Size: ${SIZES.filter(z=>num(it.sizes[z])).map(z=>z+'×'+num(it.sizes[z])).join(', ')}${num(it.extraQty)?', khác×'+num(it.extraQty):''}${it.sizeNote?' ('+it.sizeNote+')':''}\n   Tổng: ${itemQty(it)} áo`).join('\n')+(m==='oemfull'?`\nIn / thêu (xưởng làm luôn):\n`+o.deco.map(d=>`   • ${d.method} – ${d.position}${d.detail?': '+d.detail:''}`).join('\n')+(o.names.filter(r=>r.name||r.number).length?`\nDanh sách in tên/số: ${o.names.filter(r=>r.name||r.number).length} người (xem file PDF)`:'')+`\nMẫu thiết kế & logo: AKOPA gửi kèm file.`:'')+`\nTổng cộng: ${its.reduce((s,i)=>s+itemQty(i),0)} áo${g.eta||o.prod&&o.prod.due?`\nCần hàng trước: ${dmy(g.eta||o.prod.due)}`:''}${g.note?'\nGhi chú: '+g.note:''}\nXác nhận giúp AKOPA giá & ngày giao. Cảm ơn!`}
 function openPurchase(o){const P=perm(o);const ms=poModes(o);if(!ms.length){toast('Đơn này không có mẫu cần mua / đặt OEM.');return}
   showModal(`<h2>Mua hàng / đặt OEM · ${esc(o.code)}</h2>
   ${ms.map(m=>{const g=(o.purchase&&o.purchase[m])||{};const its=poItems(o,m);return `<div class="pgroup"><h3>${PO_KIND[m].short} <small class="hint">${its.reduce((s,i)=>s+itemQty(i),0)} áo · ${its.map(i=>esc(i.product+(i.color?' '+i.color:''))).join(', ')}</small></h3>
@@ -398,6 +400,15 @@ function renderPurchase(){if(!perm().purchase){app.innerHTML='<div class="empty"
   bindCards(app);const F=c=>orders.find(x=>x.code===c);
   app.querySelectorAll('[data-pur]').forEach(b=>b.onclick=()=>openPurchase(F(b.dataset.pur)));
   app.querySelectorAll('[data-po]').forEach(b=>b.onclick=()=>exportPO(F(b.dataset.po),b.dataset.m))}
+async function oemFullBlocks(o,its,cell,lay,LAB,NAVY){const H=t=>({text:t,bold:true,fontSize:11.5,color:NAVY,margin:[0,12,0,5]});const out=[];
+  out.push(H('Yêu cầu in / thêu (xưởng thực hiện)'));
+  out.push(o.deco.length?{table:{headerRows:1,widths:[100,90,'*'],body:[['Kỹ thuật','Vị trí','Nội dung / kích thước / màu'].map(t=>cell(t,{bold:true,fillColor:LAB}))].concat(o.deco.map(x=>[cell(x.method),cell(x.position),cell(x.detail)]))},layout:lay}:{text:'—'});
+  const logos=(await Promise.all(o.logoImages.filter(isImg).slice(0,4).map(a=>toDataURL(a,500)))).filter(Boolean);
+  if(logos.length||o.logoLink){out.push(H('Logo'));if(logos.length)out.push({columns:logos.map(u=>({image:u,fit:[120,90]})),columnGap:10});if(o.logoLink)out.push({text:'File gốc: '+o.logoLink,fontSize:9,color:'#1f62a8',margin:[0,4,0,0]})}
+  const ids=its.map(i=>i.id);const names=o.names.filter(r=>(r.name||r.number||r.size)&&(!r.item||ids.includes(r.item)||its.length===o.items.length));
+  if(names.length){out.push(H(`Danh sách in tên / số (${names.length} người)`));out.push({table:{headerRows:1,widths:[24,'*',40,44,'*'],body:[['#','Tên in','Số','Size','Ghi chú'].map(t=>cell(t,{bold:true,fillColor:LAB}))].concat(names.map((r,i)=>[cell(i+1),cell(r.name,{bold:true}),cell(r.number,{alignment:'center'}),cell(r.size,{alignment:'center'}),cell(r.note)]))},layout:lay})}
+  if(o.prodNote){out.push(H('Ghi chú sản xuất'));out.push({text:o.prodNote})}
+  return out}
 async function exportPO(o,m){if(!downloads){toast('Chế độ xem này không cho tải file.');return}toast('Đang tạo phiếu…',30000);
   try{await loadJS('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js');await loadJS('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.min.js');
     const NAVY='#1f2a6b',LINE='#c9cfdc',LAB='#eef0f7';const K=PO_KIND[m];const g=(o.purchase&&o.purchase[m])||{};const its=poItems(o,m);
@@ -405,7 +416,7 @@ async function exportPO(o,m){if(!downloads){toast('Chế độ xem này không c
     const head=['#','Loại áo / vải / màu'].concat(SIZES,['Khác','Tổng']).map(t=>cell(t,{bold:true,fillColor:LAB,alignment:'center'}));
     const rows=its.map((it,i)=>[cell(i+1,{alignment:'center'}),cell(`${it.product}\n${it.fabric}${it.color?' · '+it.color:''}${it.sizeNote?'\n'+it.sizeNote:''}`)].concat(SIZES.map(z=>cell(num(it.sizes[z])||'',{alignment:'center'})),[cell(num(it.extraQty)||'',{alignment:'center'}),cell(itemQty(it),{bold:true,alignment:'center'})]));
     rows.push([cell(''),cell('Tổng cộng',{bold:true})].concat(SIZES.map(z=>cell(its.reduce((s,i)=>s+num(i.sizes[z]),0)||'',{alignment:'center',bold:true})),[cell(its.reduce((s,i)=>s+num(i.extraQty),0)||'',{alignment:'center',bold:true}),cell(its.reduce((s,i)=>s+itemQty(i),0),{bold:true,alignment:'center'})]));
-    let imgs=[];if(m==='oem'){const ap=chosenList(o.design);const af=(o.design&&o.design.approvedFor)||{};const ids=its.map(i=>i.id);const vs=ap.filter(v=>!af[v.v]||ids.includes(af[v.v]));for(const v of vs){for(const a of v.images.filter(isImg).slice(0,2)){const u=await toDataURL(a);if(u)imgs.push(u)}}}
+    let imgs=[];if(m==='oem'||m==='oemfull'){const ap=chosenList(o.design);const af=(o.design&&o.design.approvedFor)||{};const ids=its.map(i=>i.id);const vs=ap.filter(v=>!af[v.v]||ids.includes(af[v.v]));for(const v of vs){for(const a of v.images.filter(isImg).slice(0,2)){const u=await toDataURL(a);if(u)imgs.push(u)}}}
     const dd={pageSize:'A4',pageMargins:[32,30,32,36],defaultStyle:{font:'Roboto',fontSize:9.5},
       content:[{columns:[{stack:[{text:COMPANY.brand,bold:true,fontSize:16,color:NAVY},{text:COMPANY.name+' · '+COMPANY.city,fontSize:8.5,color:'#555'}]},{stack:[{text:K.title,bold:true,fontSize:15,alignment:'right'},{text:`Số: ${o.code}-${K.suf}`,fontSize:11,bold:true,alignment:'right',color:NAVY}]}]},
         {canvas:[{type:'line',x1:0,y1:6,x2:531,y2:6,lineWidth:1.5,lineColor:NAVY}]},
@@ -414,6 +425,7 @@ async function exportPO(o,m){if(!downloads){toast('Chế độ xem này không c
         {text:'Chi tiết số lượng theo size',bold:true,fontSize:11.5,color:NAVY,margin:[0,12,0,5]},
         {table:{headerRows:1,widths:[18,'*'].concat(SIZES.map(()=>24),[28,30]),body:[head].concat(rows)},layout:lay},
         ...(imgs.length?[{text:'Mẫu thiết kế (tham khảo)',bold:true,fontSize:11.5,color:NAVY,margin:[0,12,0,5]},{columns:imgs.slice(0,4).map(u=>({image:u,fit:[imgs.length>1?250:500,240]})),columnGap:10}]:[]),
+        ...(m==='oemfull'?await oemFullBlocks(o,its,cell,lay,LAB,NAVY):[]),
         {text:'Ghi chú',bold:true,fontSize:11.5,color:NAVY,margin:[0,12,0,5]},{text:g.note||'—'},
         {text:'Đề nghị đối tác xác nhận giá, ngày giao và gửi lại cho AKOPA.',italics:true,fontSize:9,color:'#555',margin:[0,10,0,0]},
         {margin:[0,24,0,0],columns:['Người đặt hàng (AKOPA)','Xác nhận của '+(m==='oem'?'xưởng':'nhà cung cấp')].map(t=>({stack:[{text:t,bold:true,alignment:'center'},{text:'(ký, ghi rõ họ tên)',fontSize:8,color:'#777',alignment:'center',margin:[0,0,0,40]}]}))}]};
