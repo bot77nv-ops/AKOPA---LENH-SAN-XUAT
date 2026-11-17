@@ -144,6 +144,9 @@ fieldset:disabled .calbtn{display:none}
 .vopt .vthumbs{display:flex;gap:6px;grid-row:1/3;grid-column:3}
 .vopt .vthumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 .vopt small{grid-column:1/3}
+.check{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent);flex:0 0 auto}
+.check:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .vchosen{border-left:3px solid var(--ok);padding-left:8px}
 fieldset:disabled .pastebox,
 fieldset:disabled .addimg,fieldset:disabled .x,fieldset:disabled .rowdel,fieldset:disabled .only-edit{display:none}
@@ -282,7 +285,7 @@ function blank(){return{code:'',status:'Mới',channel:'',salesId:'',customer:{n
   deliveryDate:'',shipMethod:'',shipFee:0,discount:0,vat:0,deposit:0,payments:[],note:'',prodNote:'',
   design:null,prod:null,delivery:null,history:[]}}
 function normalize(o){const b=blank();const r=Object.assign(b,o||{});r.customer=Object.assign(blank().customer,r.customer||{});
-  ['items','deco','logoImages','refImages','listFiles','names','payments','history'].forEach(k=>{if(!Array.isArray(r[k]))r[k]=[]});
+  ['items','deco','logoImages','refImages','listFiles','names','payments','history','prodPrev'].forEach(k=>{if(!Array.isArray(r[k]))r[k]=[]});
   if(!r.items.length)r.items=[blankItem()];r.items.forEach(i=>{if(!i.sizes||typeof i.sizes!=='object')i.sizes={}});return r}
 const itemQty=i=>SIZES.reduce((s,z)=>s+num(i.sizes[z]),0)+num(i.extraQty);
 const qtyOf=o=>o.items.reduce((s,i)=>s+itemQty(i),0);
@@ -623,7 +626,7 @@ function diffText(a,b){const ch=[];if(a.customer.name!==b.customer.name)ch.push(
 async function saveEdit(){if(saving||!validate(cur))return;saving=true;renderBar();
   try{const p=payload(cur);const live=await db.doc('orders/'+cur.code).get();const L=live.exists?normalize(live.data()):orig;
     /* giữ các phần bộ phận khác đang cập nhật */
-    ['design','prod','delivery','payments','status','history'].forEach(k=>p[k]=L[k]);
+    ['design','prod','prodPrev','delivery','payments','status','history'].forEach(k=>p[k]=L[k]??null);
     p.updatedAt=nowISO();p.updatedBy=me||'';p.history=(L.history||[]).concat([hist(diffText(orig,cur))]).slice(-80);
     await db.doc('orders/'+cur.code).update(p);saving=false;toast('Đã lưu');openForm(Object.assign(normalize(Object.assign({},L,p)),{code:cur.code}),'view');
   }catch(e){saving=false;renderBar();toast('Lưu chưa được: '+(e.message||e.code),5000)}}
@@ -649,11 +652,12 @@ function renderBar(){const b=$('#barIn');const o=cur;
   if(isActive(o)&&!o.prod)A.push(['bProd','Chuyển sản xuất','primary']);
   if(o.status==='Sẵn sàng giao')A.push(['bDeliver','Giao hàng','primary']);
   if(o.status!=='Hủy'&&remain(o)>0&&o.code)A.push(['bPay','Thu tiền','']);
+  if(isActive(o)&&o.design&&(o.design.state==='approved'||o.prod))A.push(['bMore','Khách thêm / sửa mẫu','']);
   A.push(['bPdf','Tải lệnh SX (PDF)','']);A.push(['bStatus','Đổi trạng thái','']);
   b.innerHTML=A.map(([id,l,c])=>`<button class="btn ${c}" id="${id}">${l}</button>`).join('');
   const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f};
   on('bEdit',()=>{mode='edit';orig=clone(cur);renderForm()});on('bDesign',()=>openSendDesign(o));on('bApprove',()=>openApprove(o));on('bRedo',()=>openRedo(o));
-  on('bProd',()=>openToProd(o));on('bDeliver',()=>openDeliver(o));on('bPay',()=>openPay(o));on('bPdf',()=>exportPdf(o));on('bStatus',()=>openStatus(o));
+  on('bProd',()=>openToProd(o));on('bDeliver',()=>openDeliver(o));on('bPay',()=>openPay(o));on('bPdf',()=>exportPdf(o));on('bStatus',()=>openStatus(o));on('bMore',()=>openStatus(o,'Chờ duyệt mẫu',true));
 }
 
 /* ================= thiết kế ================= */
@@ -759,11 +763,45 @@ function renderMoney(){if(!perm().money){app.innerHTML='<div class="empty"><h3>M
 }
 
 /* ================= trạng thái tay ================= */
-function openStatus(o){showModal(`<h2>Đổi trạng thái ${esc(o.code)}</h2><p class="hint">Dùng khi cần sửa tay. Các nút Gửi thiết kế / Chuyển sản xuất / Giao hàng tự đổi trạng thái.</p>
-  <label class="f"><span>Trạng thái</span><select id="sS">${opts(STATUSES,o.status)}</select></label><label class="f"><span>Lý do</span><input id="sR" placeholder="VD: khách tạm hoãn"></label>
-  <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Lưu</button></div>`);
-  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const s=$('#sS').value;if(s===o.status){closeModal();return}if(['Hủy','Tạm dừng'].includes(s)&&!$('#sR').value.trim()){toast('Ghi lý do khi hủy / tạm dừng.');return}
-    act(()=>patch(o,{status:s,...(s==='Hoàn tất'?{completedAt:nowISO()}:{})},`Trạng thái ${o.status} → ${s}${$('#sR').value.trim()?' ('+$('#sR').value.trim()+')':''}`),'Đã đổi trạng thái')}}
+/* Đổi trạng thái có đồng bộ quy trình: lùi về thiết kế / tiến tới sản xuất đều làm được */
+const SX_BEFORE=['Mới','Chờ duyệt mẫu','Đã duyệt mẫu'];
+function openStatus(o,preset,quick){const d=o.design;const vs=(d&&d.versions)||[];const P=o.prod;
+  showModal(`<h2>${quick?'Khách đặt thêm / sửa mẫu · ':'Đổi trạng thái '}${esc(o.code)}</h2>
+  <p class="hint">Hiện tại: <b>${esc(o.status)}</b>${P?` · sản xuất đang ở bước “${esc(STAGES[Math.min(P.stage,STAGES.length-1)])}”${P.stage>=STAGES.length?' (đã xong)':''}`:''}${d?` · thiết kế: ${esc(dLabel(d))}`:''}</p>
+  <label class="f"${quick?' hidden':''}><span>Chuyển sang trạng thái</span><select id="sS">${opts(STATUSES,preset||o.status)}</select></label>
+  <div id="stOpts" style="display:flex;flex-direction:column;gap:10px"></div>
+  <label class="f"><span>Lý do / ghi chú</span><input id="sR" placeholder="${quick?'VD: khách thêm mẫu áo polo trắng 20 cái':'VD: thao tác nhầm, khách tạm hoãn…'}"></label>
+  <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">${quick?'Gửi lại thiết kế':'Lưu trạng thái'}</button></div>`);
+  const box=$('#stOpts');
+  const draw=()=>{const t=$('#sS').value;let h='';
+    if(SX_BEFORE.includes(t)&&P)h+=`<div class="banner" style="margin:0">Tiến độ sản xuất hiện tại sẽ được <b>xóa khỏi tab Sản xuất</b> (vẫn lưu trong lịch sử). Khi xong thiết kế, bấm “Chuyển sản xuất” lại.</div>`;
+    if(t==='Mới'||t==='Chờ duyệt mẫu'){
+      h+=`<label class="check"><input type="checkbox" id="stRe"${t==='Chờ duyệt mẫu'?' checked':''}> <span>Gửi bộ phận thiết kế làm tiếp${vs.length?` (mẫu mới sẽ là V${vs.length+1}, các bản cũ vẫn giữ)`:''}</span></label>
+      <label class="f" id="stReqW"><span>Yêu cầu thiết kế thêm</span><textarea id="stReq" placeholder="VD: thêm mẫu áo polo trắng, logo ngực trái giống mẫu cũ">${quick?'':esc(d&&d.request||'')}</textarea></label>`}
+    if(t==='Đã duyệt mẫu'&&vs.length)h+=`<label class="f"><span>Mẫu khách chốt</span><select id="stV">${vs.slice().reverse().map(v=>`<option value="${v.v}"${chosenV(d)===v?' selected':''}>V${v.v} · ${dt(v.at)}</option>`).join('')}</select></label>`;
+    if(t==='Đang sản xuất'){const cs=P?Math.min(P.stage,STAGES.length-1):0;
+      h+=`<label class="f"><span>Đang ở bước</span><select id="stStage">${STAGES.map((n,i)=>`<option value="${i}"${i===cs?' selected':''}>${i+1}. ${esc(n)}</option>`).join('')}</select></label>`;
+      if(!P)h+=`<label class="f"><span>Nơi sản xuất</span><select id="stMode"><option value="inhouse">Xưởng AKOPA</option><option value="outsource">Gia công ngoài</option></select></label><label class="f"><span>Tên xưởng (nếu gia công)</span><input id="stFac"></label>`}
+    box.innerHTML=h;const re=$('#stRe');if(re){const w=$('#stReqW');const f=()=>w.hidden=!re.checked;re.onchange=f;f()}};
+  $('#sS').onchange=draw;draw();
+  $('#mX').onclick=closeModal;
+  $('#mOk').onclick=()=>{const t=$('#sS').value;const why=$('#sR').value.trim();const now=nowISO();
+    if(['Hủy','Tạm dừng'].includes(t)&&!why){toast('Ghi lý do khi hủy / tạm dừng.');return}
+    const upd={status:t};const notes=[];
+    if(SX_BEFORE.includes(t)&&P){upd.prod=null;upd.prodPrev=(o.prodPrev||[]).concat([Object.assign({},P,{cancelledAt:now})]);notes.push('xóa tiến độ sản xuất')}
+    if(t==='Mới'||t==='Chờ duyệt mẫu'){const re=$('#stRe');if(re&&re.checked){const req=($('#stReq').value||'').trim();if(quick&&!req){toast('Ghi rõ khách cần thiết kế thêm gì.');return}
+      const nd=Object.assign({assignee:'',versions:[]},d||{},{state:vs.length?'redo':'working',request:req||(d&&d.request)||'',sentAt:now,sentBy:me||''});delete nd.approvedV;delete nd.approvedAt;
+      if(vs.length&&req){nd.versions=clone(vs);nd.versions[nd.versions.length-1].feedback=req}
+      upd.design=nd;notes.push('gửi lại thiết kế'+(req?': '+req:''))}
+      else if(d&&d.state==='approved'&&t==='Chờ duyệt mẫu'){upd.design=Object.assign({},d,{state:'review'});delete upd.design.approvedV}}
+    if(t==='Đã duyệt mẫu'&&vs.length){const v=+$('#stV').value;upd.design=Object.assign({},d,{state:'approved',approvedV:v,approvedAt:now});notes.push('mẫu chốt V'+v)}
+    if(t==='Đang sản xuất'){const st=+$('#stStage').value;upd.prod=P?Object.assign({},P,{stage:st}):{mode:$('#stMode').value,factory:($('#stFac').value||'').trim(),stage:st,due:'',startedAt:now,stageAt:{}};delete upd.prod.doneAt;notes.push('bước '+(st+1)+' '+STAGES[st])}
+    if(t==='Sẵn sàng giao'&&P&&P.stage<STAGES.length){upd.prod=Object.assign({},P,{stage:STAGES.length,doneAt:now})}
+    if(t==='Hoàn tất')upd.completedAt=now;
+    if(!DONE.includes(t)&&o.completedAt)upd.completedAt=null;
+    if(t===o.status&&!notes.length){closeModal();return}
+    act(()=>patch(o,upd,`${quick?'Khách đặt thêm/sửa mẫu. ':''}Trạng thái ${o.status} → ${t}${notes.length?' ('+notes.join(', ')+')':''}${why?' · '+why:''}`),quick?'Đã gửi lại thiết kế':'Đã đổi trạng thái')};
+}
 
 /* ================= doanh thu ================= */
 const doneAt=o=>o.completedAt||(o.delivery&&o.delivery.at)||o.updatedAt||o.createdAt;
