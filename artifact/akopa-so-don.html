@@ -335,7 +335,26 @@ const depositOk=o=>!!(o.depositConfirm&&o.depositConfirm.at)||(legacyDep(o)&&num
 function preStatus(o){if(!designOk(o))return o.design?'Chờ duyệt mẫu':'Mới';if(!priceOk(o))return 'Đã duyệt mẫu';if(!depositOk(o))return 'Chờ cọc';return 'Đã cọc'}
 const PRE=['Mới','Chờ duyệt mẫu','Đã duyệt mẫu','Chờ cọc','Đã cọc'];
 function withPre(o,upd){const m=Object.assign({},o,upd);if(!m.prod&&PRE.includes(o.status)&&!upd.status)upd.status=preStatus(m);return upd}
-const ACCOUNTS=['TK công ty','TK cá nhân Giám đốc','Tiền mặt','Khác'];
+const BANKS=[{label:'Vietcombank 0501000120299 – Giám đốc',bank:'Vietcombank',no:'0501000120299',owner:'Giám đốc'},{label:'Sacombank 040101727787 – Công ty',bank:'Sacombank',no:'040101727787',owner:'Tài khoản công ty'}];
+const ACCOUNTS=BANKS.map(b=>b.label).concat(['Tiền mặt','Khác']);
+const isBankAcc=a=>BANKS.some(b=>b.label===a);
+function bankInfoText(o){const amt=num(o.deposit);return `Thông tin chuyển khoản đặt cọc đơn ${o.code}:\n${BANKS.map(b=>`• ${b.bank}: ${b.no} (${b.owner})`).join('\n')}${amt?`\nSố tiền cọc: ${fmt(amt)} đ`:''}\nNội dung CK: ${o.code} COC\nCK xong anh/chị gửi giúp AKOPA bill chuyển khoản nhé. Cảm ơn!`}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast('Đã copy — dán gửi khách qua Zalo/Messenger')}catch(e){showModal(`<h2>Copy thông tin chuyển khoản</h2><textarea id="cpT" style="min-height:160px">${esc(t)}</textarea><p class="hint">Bôi đen rồi copy (Ctrl+C).</p><div class="acts"><button class="btn" id="mX">Đóng</button></div>`);$('#mX').onclick=closeModal;$('#cpT').select()}}
+function billZone(boxId,arr){const addF=async fs=>{await uploadInto(arr,fs);draw()};
+  const draw=()=>{const z=$('#'+boxId);if(!z)return;z.innerHTML=arr.map((a,i)=>`<div class="thumb">${isImg(a)?`<img src="${esc(imgSrc(a))}" alt="bill">`:`<a class="fn" href="${esc(imgSrc(a))}" target="_blank" rel="noopener">${esc(a.name||'file')}</a>`}<button type="button" class="x" data-i="${i}" aria-label="Xóa">×</button></div>`).join('')+`<label class="addimg"><b>+</b>Thêm bill<input type="file" multiple accept="image/*,.pdf"></label><textarea class="pastebox" placeholder="${PASTE_PH}" aria-label="Dán ảnh bill"></textarea>`;
+    z.querySelector('input[type=file]').onchange=e=>addF([...e.target.files]);z.querySelectorAll('.x').forEach(b=>b.onclick=()=>{arr.splice(+b.dataset.i,1);draw()});bindPasteBox(z,addF)};
+  draw();sheetPaste=addF}
+function openDepositClaim(o){const c=o.depositClaim||{};const tmp={imgs:clone(c.imgs||[])};
+  showModal(`<h2>Gửi bill cọc cho kế toán · ${esc(o.code)}</h2>
+  <p class="hint">Khách gửi bill chuyển khoản / UNC qua Zalo → bấm chuột phải “Sao chép ảnh” → dán vào ô bên dưới (Ctrl+V).</p>
+  <div class="f"><span class="flabel">Ảnh bill CK / UNC <i style="font-style:normal;color:var(--bad)">*</i></span><div class="thumbs" id="cBill"></div></div>
+  <label class="f"><span>Số tiền trên bill (đ)</span><input type="number" id="cA" min="0" value="${num(c.amount)||num(o.deposit)||''}"></label>
+  <label class="f"><span>Khách chuyển vào</span><select id="cAcc">${ACCOUNTS.map(a=>`<option${a===(c.account||ACCOUNTS[0])?' selected':''}>${esc(a)}</option>`).join('')}</select></label>
+  <label class="f"><span>Ghi chú cho kế toán</span><input id="cN" value="${esc(c.note||'')}" placeholder="VD: khách CK 2 lần, đây là lần 1"></label>
+  <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Gửi kế toán xác nhận</button></div>`);
+  billZone('cBill',tmp.imgs);
+  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const a=num($('#cA').value);if(!tmp.imgs.length){toast('Dán hoặc tải ảnh bill trước.');return}if(a<=0){toast('Nhập số tiền trên bill.');return}
+    const acc=$('#cAcc').value;act(()=>patch(o,{depositClaim:{imgs:tmp.imgs,amount:a,account:acc,note:$('#cN').value.trim(),at:nowISO(),by:me||''}},`Sale gửi bill cọc ${vnd(a)} (${acc}) – chờ kế toán xác nhận`),'Đã gửi bill cho kế toán')}}
 const remain=o=>total(o)-paid(o);
 const isActive=o=>!DONE.includes(o.status);
 const productLine=o=>o.items.map(i=>i.product+(i.color?' '+i.color:'')).join(' + ');
@@ -561,8 +580,8 @@ function gatesHTML(o){const P=perm(o);const q=o.quote||{};const dc=o.depositConf
   return `<section class="sec"><h2>Điều kiện để sản xuất <small>đủ 3 bước mới chuyển sản xuất</small></h2><ul class="gates">
    ${g(priceOk(o),'Khách chốt giá',priceOk(o)?`${dt(q.at)} · ${esc(nameOf(q.by))}${P.money&&q.total?' · '+vnd(q.total):''}${q.policy?' · '+esc(q.policy):''}`:'Sale bấm “Khách chốt giá” khi khách đồng ý giá & chính sách')}
    ${g(designOk(o),'Khách chốt mẫu',designOk(o)?apv.map(v=>'V'+v.v).join(' + '):o.design?esc(dLabel(o.design)):'Chưa gửi thiết kế')}
-   ${g(depositOk(o),'Kế toán xác nhận đã nhận cọc',dc?`${P.pay?vnd(dc.amount)+' · ':''}${esc(dc.account||'')}${dc.ref?' · '+esc(dc.ref):''} · ${dmy(dc.date||dc.at)} · ${esc(nameOf(dc.by))}`:dw?`Quản lý cho sản xuất không cần cọc · ${esc(dw.reason||'')} · ${esc(nameOf(dw.by))}`:legacyDep(o)&&num(o.deposit)>0?'Đơn cũ: đã ghi cọc trước khi có bước xác nhận':(P.pay&&num(o.deposit)?'Cọc yêu cầu '+vnd(o.deposit)+' · ':'')+'Chờ kế toán xác nhận')}
-  </ul>${dc&&dc.proof&&dc.proof.length&&P.pay?`<div class="thumbs" style="margin-top:8px">${dc.proof.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="Chứng từ cọc" data-zoom></div>`).join('')}</div>`:''}</section>`}
+   ${g(depositOk(o),'Kế toán xác nhận đã nhận cọc',dc?`${P.pay?vnd(dc.amount)+' · ':''}${esc(dc.account||'')}${dc.ref?' · '+esc(dc.ref):''} · ${dmy(dc.date||dc.at)} · ${esc(nameOf(dc.by))}`:dw?`Quản lý cho sản xuất không cần cọc · ${esc(dw.reason||'')} · ${esc(nameOf(dw.by))}`:legacyDep(o)&&num(o.deposit)>0?'Đơn cũ: đã ghi cọc trước khi có bước xác nhận':(P.pay&&num(o.deposit)?'Cọc yêu cầu '+vnd(o.deposit)+' · ':'')+(o.depositClaim&&o.depositClaim.at?`Sale đã gửi bill${P.pay?' '+vnd(o.depositClaim.amount):''} (${esc(o.depositClaim.account||'')}) · ${dt(o.depositClaim.at)} – chờ kế toán xác nhận`:'Chờ khách chuyển cọc')+(P.pay&&!depositOk(o)?' <button type="button" class="btn sm" id="cpBank">Copy STK gửi khách</button>':''))}
+  </ul>${!dc&&o.depositClaim&&(o.depositClaim.imgs||[]).length&&P.pay?`<div class="thumbs" style="margin-top:8px">${o.depositClaim.imgs.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="Bill sale gửi" data-zoom></div>`).join('')}</div>`:''}${dc&&dc.proof&&dc.proof.length&&P.pay?`<div class="thumbs" style="margin-top:8px">${dc.proof.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="Chứng từ cọc" data-zoom></div>`).join('')}</div>`:''}</section>`}
 function openQuote(o){showModal(`<h2>Khách chốt giá · ${esc(o.code)}</h2>
   <p>Tổng đơn: <b>${vnd(total(o))}</b> · ${fmt(qtyOf(o))} áo</p>
   <label class="f"><span>Tiền cọc yêu cầu (đ)</span><input type="number" id="qDep" min="0" value="${num(o.deposit)||''}"></label>
@@ -572,19 +591,20 @@ function openQuote(o){showModal(`<h2>Khách chốt giá · ${esc(o.code)}</h2>
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const dep=num($('#qDep').value);const pol=$('#qPol').value.trim();
     const upd=withPre(o,{quote:{agreed:true,at:nowISO(),by:me||'',total:total(o),policy:pol},deposit:dep,...(o.depositPaid===undefined&&!o.depositConfirm?{depositPaid:0}:{})});
     act(()=>patch(o,upd,`Khách chốt giá ${vnd(total(o))}${dep?', cọc yêu cầu '+vnd(dep):''}${pol?' · '+pol:''}`),'Đã ghi nhận khách chốt giá')}}
-function openDeposit(o){const tmp={imgs:[]};
+function openDeposit(o){const cl=o.depositClaim||{};const tmp={imgs:clone(cl.imgs||[])};
   showModal(`<h2>Xác nhận đã nhận cọc · ${esc(o.code)}</h2>
   <p class="hint">Khách: <b>${esc(o.customer.name)}</b> · Tổng đơn ${vnd(total(o))}${num(o.deposit)?' · Cọc yêu cầu <b>'+vnd(o.deposit)+'</b>':''}</p>
-  <label class="f"><span>Số tiền thực nhận (đ)</span><input type="number" id="dA" min="0" value="${num(o.deposit)||''}"></label>
-  <label class="f"><span>Nhận vào</span><select id="dAcc">${ACCOUNTS.map(a=>`<option>${a}</option>`).join('')}</select></label>
+  ${cl.at?`<div class="banner" style="margin:0;background:var(--info-soft);color:var(--fg)">Sale <b>${esc(nameOf(cl.by))}</b> gửi bill ${dt(cl.at)}: <b>${vnd(cl.amount)}</b> vào ${esc(cl.account||'')}${cl.note?' · '+esc(cl.note):''}. Đối chiếu sao kê rồi xác nhận.</div>`:''}
+  <label class="f"><span>Số tiền thực nhận (đ)</span><input type="number" id="dA" min="0" value="${num(cl.amount)||num(o.deposit)||''}"></label>
+  <label class="f"><span>Nhận vào</span><select id="dAcc">${ACCOUNTS.map(a=>`<option${a===(cl.account||ACCOUNTS[0])?' selected':''}>${esc(a)}</option>`).join('')}</select></label>
   <div class="f"><span class="flabel">Ngày nhận tiền</span>${dateBoxHTML('dDate',new Date().toISOString().slice(0,10))}</div>
   <label class="f"><span>Mã giao dịch / nội dung CK</span><input id="dRef" placeholder="VD: FT2632...  hoặc  AK2611-001 COC"></label>
-  <div class="f"><span class="flabel">Ảnh chứng từ (không bắt buộc)</span><div class="thumbs" id="dProof"></div></div>
+  <div class="f"><span class="flabel">Ảnh bill CK / UNC</span><div class="thumbs" id="dProof"></div></div>
   <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Xác nhận đã nhận cọc</button></div>`);
   let dISO=new Date().toISOString().slice(0,10);bindDate('dDate',iso=>dISO=iso);
   const addF=async fs=>{await uploadInto(tmp.imgs,fs);draw()};
   const draw=()=>{const z=$('#dProof');if(!z)return;z.innerHTML=tmp.imgs.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="chứng từ"></div>`).join('')+`<label class="addimg"><b>+</b>Thêm ảnh<input type="file" multiple accept="image/*,.pdf"></label><textarea class="pastebox" placeholder="${PASTE_PH}" aria-label="Dán ảnh chứng từ"></textarea>`;z.querySelector('input[type=file]').onchange=e=>addF([...e.target.files]);bindPasteBox(z,addF)};draw();sheetPaste=addF;
-  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const a=num($('#dA').value);if(a<=0){toast('Nhập số tiền thực nhận.');return}if(!dISO){toast('Kiểm tra lại ngày nhận tiền.');return}
+  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const a=num($('#dA').value);if(a<=0){toast('Nhập số tiền thực nhận.');return}if(isBankAcc($('#dAcc').value)&&!tmp.imgs.length){toast('Chuyển khoản cần có ảnh bill / UNC. Dán ảnh vào ô chứng từ.',4500);return}if(!dISO){toast('Kiểm tra lại ngày nhận tiền.');return}
     const acc=$('#dAcc').value;const ref=$('#dRef').value.trim();
     const upd=withPre(o,{depositPaid:a,depositConfirm:{amount:a,account:acc,date:dISO,ref,proof:tmp.imgs,at:nowISO(),by:me||''}});
     act(()=>patch(o,upd,`Kế toán xác nhận nhận cọc ${vnd(a)} vào ${acc}${ref?' ('+ref+')':''}`),'Đã xác nhận nhận cọc')}}
@@ -729,7 +749,7 @@ function diffText(a,b){const ch=[];if(a.customer.name!==b.customer.name)ch.push(
 async function saveEdit(){if(saving||!validate(cur))return;saving=true;renderBar();
   try{const p=payload(cur);const live=await db.doc('orders/'+cur.code).get();const L=live.exists?normalize(live.data()):orig;
     /* giữ các phần bộ phận khác đang cập nhật */
-    ['design','prod','prodPrev','delivery','payments','status','history','quote','depositPaid','depositConfirm','depositWaive','depositPrev','secure'].forEach(k=>{if(L[k]===undefined)delete p[k];else p[k]=L[k]});
+    ['design','prod','prodPrev','delivery','payments','status','history','quote','depositPaid','depositConfirm','depositClaim','depositWaive','depositPrev','secure'].forEach(k=>{if(L[k]===undefined)delete p[k];else p[k]=L[k]});
     p.updatedAt=nowISO();p.updatedBy=me||'';p.history=(L.history||[]).concat([hist(diffText(orig,cur))]).slice(-80);
     await db.doc('orders/'+cur.code).update(p);saving=false;toast('Đã lưu');openForm(Object.assign(normalize(Object.assign({},L,p)),{code:cur.code}),'view');
   }catch(e){saving=false;renderBar();toast('Lưu chưa được: '+(e.message||e.code),5000)}}
@@ -748,7 +768,8 @@ function renderBar(){const b=$('#barIn');const o=cur;
   if(PM.approve&&act_&&d&&d.state==='review')A.push(['bApprove','Khách chốt mẫu','primary'],['bRedo','Khách yêu cầu sửa','']);
   else if(PM.approve&&act_&&d&&d.state==='redo'&&(d.versions||[]).length)A.push(['bApprove','Khách chốt mẫu cũ','']);
   if(PM.edit&&act_&&!o.prod&&!priceOk(o))A.push(['bQuote','Khách chốt giá',designOk(o)?'primary':'']);
-  if(PM.confirmDep&&act_&&!o.prod&&!(o.depositConfirm&&o.depositConfirm.at))A.push(['bDep','Xác nhận đã nhận cọc',priceOk(o)?'primary':'']);
+  if(PM.edit&&act_&&!o.prod&&!(o.depositConfirm&&o.depositConfirm.at)&&priceOk(o))A.push(['bClaim',o.depositClaim?'Cập nhật bill cọc':'Gửi bill cọc cho kế toán',o.depositClaim?'':'primary']);
+  if(PM.confirmDep&&act_&&!o.prod&&!(o.depositConfirm&&o.depositConfirm.at))A.push(['bDep','Xác nhận đã nhận cọc',priceOk(o)&&o.depositClaim?'primary':'']);
   if(PM.confirmDep&&o.depositConfirm&&o.depositConfirm.at&&!o.prod)A.push(['bUnDep','Hủy xác nhận cọc','']);
   if(PM.edit&&act_&&!o.prod&&(designOk(o)&&priceOk(o)&&depositOk(o)||isBoss()))A.push(['bProd','Chuyển sản xuất',designOk(o)&&priceOk(o)&&depositOk(o)?'primary':'']);
   if(PM.prod&&o.status==='Đang sản xuất'&&o.prod&&o.prod.stage<STAGES.length)A.push(['bStage','✓ Xong “'+STAGES[o.prod.stage]+'”','primary']);
@@ -759,7 +780,7 @@ function renderBar(){const b=$('#barIn');const o=cur;
   if(PM.status)A.push(['bStatus','Đổi trạng thái','']);
   b.innerHTML=A.length?A.map(([id,l,c])=>`<button class="btn ${c}" id="${id}">${esc(l)}</button>`).join(''):'<span class="hint">Bạn chỉ có quyền xem đơn này.</span>';
   const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f};
-  on('bEdit',()=>{mode='edit';orig=clone(cur);renderForm()});on('bQuote',()=>openQuote(o));on('bDep',()=>openDeposit(o));on('bUnDep',()=>openUnDeposit(o));on('bDesign',()=>openSendDesign(o));on('bApprove',()=>openApprove(o));on('bRedo',()=>openRedo(o));on('bUp',()=>openUpload(o));on('bStage',()=>stageDone(o));
+  on('bEdit',()=>{mode='edit';orig=clone(cur);renderForm()});on('bQuote',()=>openQuote(o));on('bClaim',()=>openDepositClaim(o));on('bDep',()=>openDeposit(o));on('bUnDep',()=>openUnDeposit(o));on('bDesign',()=>openSendDesign(o));on('bApprove',()=>openApprove(o));on('bRedo',()=>openRedo(o));on('bUp',()=>openUpload(o));on('bStage',()=>stageDone(o));
   on('bProd',()=>openToProd(o));on('bDeliver',()=>openDeliver(o));on('bPay',()=>openPay(o));on('bPdf',()=>exportPdf(o));on('bStatus',()=>openStatus(o));on('bMore',()=>openStatus(o,'Chờ duyệt mẫu',true));
 }
 
@@ -783,6 +804,7 @@ function bindViewExtras(){app.querySelectorAll('img[data-zoom]').forEach(im=>im.
   const s=$('#dSend');if(s)s.onclick=()=>openSendDesign(cur);
   app.querySelectorAll('[data-apv]').forEach(b=>b.onclick=()=>openApprove(cur,+b.dataset.apv));
   app.querySelectorAll('[data-unapv]').forEach(b=>b.onclick=()=>unApprove(cur,+b.dataset.unapv));
+  const cpb=$('#cpBank');if(cpb)cpb.onclick=()=>copyText(bankInfoText(cur));
   const ss=$('#secSave');if(ss)ss.onclick=()=>{const hide=[...app.querySelectorAll('[data-sec]:checked')].map(x=>x.dataset.sec);act(()=>patch(cur,{secure:{hide,by:me||'',at:nowISO()}},hide.length?'Ẩn với nhân sự khác: '+hide.map(k=>(PERM_VIEW.find(x=>x[0]===k)||[,k])[1]).join(', '):'Bỏ ẩn thông tin riêng của đơn'),'Đã lưu cài đặt ẩn')};
   const ha=$('#hAdd');if(ha)ha.onclick=async()=>{const t=$('#hNote').value.trim();if(!t)return;await act(()=>patch(cur,{},'💬 '+t),'Đã ghi')}}
 function designers(){return Object.keys(members).filter(id=>teamOf(id)==='design')}
@@ -880,8 +902,8 @@ function openPay(o){showModal(`<h2>Thu tiền đơn ${esc(o.code)}</h2><p>Còn p
 function renderMoney(){if(!(perm().pay||perm().deliver||perm().confirmDep)){app.innerHTML='<div class="empty"><h3>Mục này dành cho Sale, Kế toán, Quản lý</h3></div>';return}const ready=orders.filter(o=>o.status==='Sẵn sàng giao').sort((a,b)=>(a.deliveryDate||'9')<(b.deliveryDate||'9')?-1:1);
   const debt=orders.filter(o=>o.status==='Đã giao'&&remain(o)>0).sort((a,b)=>((a.delivery&&a.delivery.at)||'')<((b.delivery&&b.delivery.at)||'')?-1:1);
   const sum=debt.reduce((s,o)=>s+remain(o),0);const PMm=perm();
-  const dep=orders.filter(o=>isActive(o)&&!o.prod&&priceOk(o)&&!depositOk(o)).sort((a,b)=>((a.quote&&a.quote.at)||'')<((b.quote&&b.quote.at)||'')?-1:1);
-  app.innerHTML=`${PMm.confirmDep||PMm.pay?`<h2 style="font-size:20px;margin-bottom:10px">Chờ xác nhận cọc (${dep.length})</h2><div class="list" style="margin-bottom:18px">${dep.length?dep.map(o=>`<div class="qcard">${cardHTML(o,`<div class="hint">Khách chốt giá ${dt(o.quote.at)}${num(o.deposit)&&PMm.pay?' · cọc yêu cầu <b>'+vnd(o.deposit)+'</b>':''}</div>`)}${PMm.confirmDep?`<div class="qact"><button class="btn sm primary" data-dep="${esc(o.code)}">Xác nhận đã nhận cọc</button></div>`:''}</div>`).join(''):'<div class="empty">Không có đơn chờ cọc.</div>'}</div>`:''}
+  const dep=orders.filter(o=>isActive(o)&&!o.prod&&priceOk(o)&&!depositOk(o)).sort((a,b)=>((b.depositClaim?1:0)-(a.depositClaim?1:0))||(((a.quote&&a.quote.at)||'')<((b.quote&&b.quote.at)||'')?-1:1));
+  app.innerHTML=`${PMm.confirmDep||PMm.pay?`<h2 style="font-size:20px;margin-bottom:10px">Chờ xác nhận cọc (${dep.length})</h2><div class="list" style="margin-bottom:18px">${dep.length?dep.map(o=>`<div class="qcard">${cardHTML(o,`<div class="hint">Khách chốt giá ${dt(o.quote.at)}${num(o.deposit)&&PMm.pay?' · cọc yêu cầu <b>'+vnd(o.deposit)+'</b>':''} · ${o.depositClaim?`<b style="color:var(--ok)">Đã có bill${PMm.pay?' '+vnd(o.depositClaim.amount):''} → ${esc(o.depositClaim.account||'')}</b>`:'<span style="color:var(--warn)">chưa có bill</span>'}</div>`)}${PMm.confirmDep?`<div class="qact"><button class="btn sm primary" data-dep="${esc(o.code)}">Xác nhận đã nhận cọc</button></div>`:''}</div>`).join(''):'<div class="empty">Không có đơn chờ cọc.</div>'}</div>`:''}
   <h2 style="font-size:20px;margin-bottom:10px">Sẵn sàng giao (${ready.length})</h2><div class="list">${ready.length?ready.map(o=>`<div class="qcard">${cardHTML(o)}<div class="qact"><button class="btn sm primary" data-dv="${esc(o.code)}">Giao hàng</button></div></div>`).join(''):'<div class="empty">Chưa có đơn nào chờ giao.</div>'}</div>
    <h2 style="font-size:20px;margin:18px 0 10px">Đã giao, còn công nợ (${debt.length}) · ${vnd(sum)}</h2><div class="list">${debt.length?debt.map(o=>{const ds=o.delivery&&o.delivery.at?Math.round((Date.now()-new Date(o.delivery.at))/864e5):null;
      return `<div class="qcard">${cardHTML(o,ds!==null?`<div class="hint ${ds>7?'due-bad':''}">Giao ${ds} ngày trước</div>`:'')}<div class="qact"><button class="btn sm primary" data-py="${esc(o.code)}">Thu tiền</button></div></div>`}).join(''):'<div class="empty">Không còn công nợ.</div>'}</div>`;
