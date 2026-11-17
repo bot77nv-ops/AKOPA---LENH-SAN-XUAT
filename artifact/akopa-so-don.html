@@ -138,10 +138,12 @@ div.f .flabel i{font-style:normal;color:var(--bad)}
 .calquick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer}
 fieldset:disabled .calbtn{display:none}
 .vpick{display:flex;flex-direction:column;gap:8px}
-.vopt{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-rows:auto auto;gap:4px 10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer}
+.vopt{display:grid;grid-template-columns:auto auto minmax(0,1fr);cursor:default;grid-template-rows:auto auto;gap:4px 10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer}
 .vopt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .vopt input{width:18px;height:18px;accent-color:var(--accent)}
 .vopt .vthumbs{display:flex;gap:6px;grid-row:1/3;grid-column:3}
+.vchk{display:flex;align-items:center;gap:8px;grid-column:1/3;cursor:pointer}
+.vopt .vfor{grid-column:1/-1;min-height:34px;padding:4px 8px;font-size:13px}
 .vopt .vthumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 .vopt small{grid-column:1/3}
 .check{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
@@ -665,7 +667,7 @@ function dLabel(d){return!d?'Chưa gửi thiết kế':{working:'Thiết kế đ
 function designSecHTML(o){const d=o.design;
   return `<section class="sec"><h2>Mẫu thiết kế <small>${esc(dLabel(d))}${d&&d.assignee?' · '+esc(nameOf(d.assignee)):''}</small></h2>
    ${d&&d.request?`<p class="hint" style="margin:0 0 8px">Yêu cầu: ${esc(d.request)}</p>`:''}
-   ${d&&d.versions&&d.versions.length?d.versions.slice().reverse().map(v=>`<div style="margin-bottom:10px"${d.state==='approved'&&chosenV(d)===v?' class="vchosen"':''}><b>V${v.v}</b>${d.state==='approved'&&chosenV(d)===v?' <span class="pill" style="'+tone('Sẵn sàng giao')+'">✓ Khách chốt</span>':''}${perm().approve&&isActive(o)&&!(d.state==='approved'&&chosenV(d)===v)?` <button type="button" class="btn sm" data-apv="${v.v}">${d.state==='approved'?'Đổi sang bản này':'Khách chốt bản này'}</button>`:''} <span class="hint">${dt(v.at)} · ${esc(nameOf(v.by))}${v.note?' · '+esc(v.note):''}${v.feedback?' · <span style="color:var(--bad)">Khách góp ý: '+esc(v.feedback)+'</span>':''}</span><div class="thumbs" style="margin-top:6px">${v.images.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="Mẫu V${v.v}" data-zoom></div>`).join('')}</div></div>`).join(''):'<p class="hint" style="margin:0">Chưa có mẫu.</p>'}
+   ${d&&d.versions&&d.versions.length?d.versions.slice().reverse().map(v=>`<div style="margin-bottom:10px"${apvSet(d).includes(v.v)?' class="vchosen"':''}><b>V${v.v}</b>${apvSet(d).includes(v.v)?' <span class="pill" style="'+tone('Sẵn sàng giao')+'">✓ Khách chốt</span>'+((d.approvedFor||{})[v.v]?' <span class="hint">· '+esc(itemLabel(o,d.approvedFor[v.v]))+'</span>':''):''}${perm().approve&&isActive(o)?(apvSet(d).includes(v.v)?` <button type="button" class="btn sm" data-unapv="${v.v}">Bỏ chốt</button>`:` <button type="button" class="btn sm" data-apv="${v.v}">${apvSet(d).length?'Chốt thêm bản này':'Khách chốt bản này'}</button>`):''} <span class="hint">${dt(v.at)} · ${esc(nameOf(v.by))}${v.note?' · '+esc(v.note):''}${v.feedback?' · <span style="color:var(--bad)">Khách góp ý: '+esc(v.feedback)+'</span>':''}</span><div class="thumbs" style="margin-top:6px">${v.images.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="Mẫu V${v.v}" data-zoom></div>`).join('')}</div></div>`).join(''):'<p class="hint" style="margin:0">Chưa có mẫu.</p>'}
    ${isActive(o)&&!d?'<button class="btn sm" id="dSend">Gửi bộ phận thiết kế</button>':''}
   </section>`}
 function histSecHTML(o){return `<section class="sec"><h2>Lịch sử &amp; trao đổi</h2>
@@ -674,6 +676,7 @@ function histSecHTML(o){return `<section class="sec"><h2>Lịch sử &amp; trao 
 function bindViewExtras(){app.querySelectorAll('img[data-zoom]').forEach(im=>im.onclick=()=>zoom(im.src));
   const s=$('#dSend');if(s)s.onclick=()=>openSendDesign(cur);
   app.querySelectorAll('[data-apv]').forEach(b=>b.onclick=()=>openApprove(cur,+b.dataset.apv));
+  app.querySelectorAll('[data-unapv]').forEach(b=>b.onclick=()=>unApprove(cur,+b.dataset.unapv));
   $('#hAdd').onclick=async()=>{const t=$('#hNote').value.trim();if(!t)return;await act(()=>patch(cur,{},'💬 '+t),'Đã ghi')}}
 function designers(){return Object.keys(members).filter(id=>teamOf(id)==='design')}
 function openSendDesign(o){showModal(`<h2>Gửi thiết kế đơn ${esc(o.code)}</h2>
@@ -690,13 +693,22 @@ function openUpload(o){const d=o.design;const v=(d.versions||[]).length+1;const 
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{if(!tmp.imgs.length){toast('Thêm ít nhất 1 ảnh mẫu.');return}
     const nd=Object.assign({},d,{state:'review',versions:(d.versions||[]).concat([{v,images:tmp.imgs,at:nowISO(),by:me||'',note:$('#upNote').value.trim()}])});
     act(()=>patch(o,{design:nd},`Nộp mẫu V${v}`),'Đã gửi mẫu cho sale')}}
-const chosenV=d=>{if(!d||!d.versions||!d.versions.length)return null;if(d.state==='approved'&&d.approvedV)return d.versions.find(v=>v.v===d.approvedV)||d.versions[d.versions.length-1];return d.versions[d.versions.length-1]};
-function openApprove(o,preV){const vs=o.design.versions||[];const def=preV||(o.design.approvedV)||vs.length;showModal(`<h2>Khách chốt mẫu nào?</h2><p class="hint">Mẫu được chọn sẽ in vào lệnh sản xuất.</p>
-  <div class="vpick">${vs.slice().reverse().map(v=>`<label class="vopt"><input type="radio" name="apv" value="${v.v}"${v.v===def?' checked':''}><b>V${v.v}</b><span class="vthumbs">${v.images.slice(0,3).map(a=>`<img src="${esc(imgSrc(a))}" alt="Mẫu V${v.v}">`).join('')}</span><small class="hint">${dt(v.at)}${v.feedback?' · đã góp ý sửa':''}</small></label>`).join('')}</div>
-  <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Khách chốt mẫu này</button></div>`);
-  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const r=$('input[name=apv]:checked');if(!r){toast('Chọn mẫu khách chốt.');return}const v=+r.value;const was=o.design.state==='approved'?o.design.approvedV:null;
-    const upd={design:Object.assign({},o.design,{state:'approved',approvedV:v,approvedAt:nowISO()})};if(['Mới','Chờ duyệt mẫu'].includes(o.status))upd.status='Đã duyệt mẫu';
-    act(()=>patch(o,upd,was&&was!==v?`Đổi mẫu chốt V${was} → V${v}`:`Khách chốt mẫu V${v}`),`Đã chốt mẫu V${v}`)}}
+/* Một đơn có thể chốt nhiều mẫu (VD: V3 cho mẫu cũ + V4 cho mẫu bổ sung) */
+const apvSet=d=>{if(!d)return[];if(Array.isArray(d.approvedVs))return d.approvedVs.slice();if(d.approvedV)return[d.approvedV];if(d.state==='approved'&&d.versions&&d.versions.length)return[d.versions[d.versions.length-1].v];return[]};
+const chosenList=d=>{const set=apvSet(d);return(d&&d.versions||[]).filter(v=>set.includes(v.v))};
+const chosenV=d=>{const L=chosenList(d);if(L.length)return L[L.length-1];return d&&d.versions&&d.versions.length?d.versions[d.versions.length-1]:null};
+const itemLabel=(o,id)=>{if(!id)return'';const i=o.items.findIndex(x=>x.id===id);return i<0?'':`Mẫu áo ${i+1}: ${o.items[i].product}${o.items[i].color?' '+o.items[i].color:''}`};
+function openApprove(o,preV){const d=o.design;const vs=d.versions||[];const set=new Set(apvSet(d));set.add(preV||vs.length);const pf=d.approvedFor||{};const multi=o.items.length>1;
+  showModal(`<h2>Khách chốt mẫu nào?</h2><p class="hint">Tích <b>tất cả</b> các mẫu khách chốt — đơn có nhiều mẫu áo thì chốt nhiều bản. Các mẫu được tích sẽ in vào lệnh sản xuất.</p>
+  <div class="vpick">${vs.slice().reverse().map(v=>`<div class="vopt"><label class="vchk"><input type="checkbox" name="apv" value="${v.v}"${set.has(v.v)?' checked':''}><b>V${v.v}</b></label><span class="vthumbs">${v.images.slice(0,3).map(a=>`<img src="${esc(imgSrc(a))}" alt="Mẫu V${v.v}">`).join('')}</span><small class="hint">${dt(v.at)}${v.feedback?' · có góp ý sửa':''}</small>${multi?`<select class="vfor" data-v="${v.v}" aria-label="Mẫu V${v.v} dùng cho"><option value="">Dùng cho: tất cả</option>${o.items.map((it,i)=>`<option value="${it.id}"${pf[v.v]===it.id?' selected':''}>Dùng cho mẫu áo ${i+1}: ${esc(it.product)}${it.color?' '+esc(it.color):''}</option>`).join('')}</select>`:''}</div>`).join('')}</div>
+  <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Lưu mẫu khách chốt</button></div>`);
+  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const vsel=[...document.querySelectorAll('input[name=apv]:checked')].map(x=>+x.value).sort((a,b)=>a-b);if(!vsel.length){toast('Tích ít nhất 1 mẫu khách chốt.');return}
+    const af={};document.querySelectorAll('.vfor').forEach(x=>{if(x.value&&vsel.includes(+x.dataset.v))af[x.dataset.v]=x.value});
+    const was=apvSet(d);const nd=Object.assign({},d,{state:'approved',approvedVs:vsel,approvedFor:af,approvedAt:nowISO()});delete nd.approvedV;
+    const upd={design:nd};if(['Mới','Chờ duyệt mẫu'].includes(o.status))upd.status='Đã duyệt mẫu';
+    const lbl=vsel.map(v=>'V'+v).join(' + ');act(()=>patch(o,upd,was.length&&d.state==='approved'?`Cập nhật mẫu chốt: ${was.map(v=>'V'+v).join(' + ')} → ${lbl}`:`Khách chốt mẫu ${lbl}`),`Đã chốt ${lbl}`)}}
+async function unApprove(o,v){const d=o.design;const set=apvSet(d).filter(x=>x!==v);const nd=Object.assign({},d,{approvedVs:set});delete nd.approvedV;if(nd.approvedFor){nd.approvedFor=Object.assign({},nd.approvedFor);delete nd.approvedFor[v]}
+  if(!set.length&&nd.state==='approved')nd.state='review';await act(()=>patch(o,{design:nd},`Bỏ chốt mẫu V${v}`),`Đã bỏ chốt V${v}`)}
 function openRedo(o){showModal(`<h2>Khách muốn sửa gì?</h2><textarea id="rTxt" placeholder="VD: logo to hơn, đổi chữ sang màu vàng"></textarea><div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Gửi lại thiết kế</button></div>`);
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const t=$('#rTxt').value.trim();if(!t){toast('Ghi rõ nội dung cần sửa.');return}const d=clone(o.design);d.state='redo';const L=d.versions[d.versions.length-1];if(L)L.feedback=t;act(()=>patch(o,{design:d},'Khách yêu cầu sửa: '+t),'Đã gửi lại thiết kế')}}
 function renderDesign(){const act_=orders.filter(o=>isActive(o)&&o.design);
@@ -778,7 +790,7 @@ function openStatus(o,preset,quick){const d=o.design;const vs=(d&&d.versions)||[
     if(t==='Mới'||t==='Chờ duyệt mẫu'){
       h+=`<label class="check"><input type="checkbox" id="stRe"${t==='Chờ duyệt mẫu'?' checked':''}> <span>Gửi bộ phận thiết kế làm tiếp${vs.length?` (mẫu mới sẽ là V${vs.length+1}, các bản cũ vẫn giữ)`:''}</span></label>
       <label class="f" id="stReqW"><span>Yêu cầu thiết kế thêm</span><textarea id="stReq" placeholder="VD: thêm mẫu áo polo trắng, logo ngực trái giống mẫu cũ">${quick?'':esc(d&&d.request||'')}</textarea></label>`}
-    if(t==='Đã duyệt mẫu'&&vs.length)h+=`<label class="f"><span>Mẫu khách chốt</span><select id="stV">${vs.slice().reverse().map(v=>`<option value="${v.v}"${chosenV(d)===v?' selected':''}>V${v.v} · ${dt(v.at)}</option>`).join('')}</select></label>`;
+    if(t==='Đã duyệt mẫu'&&vs.length){const cs=apvSet(d).length?apvSet(d):[vs[vs.length-1].v];h+=`<div class="f"><span class="flabel">Mẫu khách chốt (tích nhiều nếu có)</span><div class="qact">${vs.map(v=>`<label class="check" style="padding:6px 10px"><input type="checkbox" name="stV" value="${v.v}"${cs.includes(v.v)?' checked':''}> V${v.v}</label>`).join('')}</div></div>`}
     if(t==='Đang sản xuất'){const cs=P?Math.min(P.stage,STAGES.length-1):0;
       h+=`<label class="f"><span>Đang ở bước</span><select id="stStage">${STAGES.map((n,i)=>`<option value="${i}"${i===cs?' selected':''}>${i+1}. ${esc(n)}</option>`).join('')}</select></label>`;
       if(!P)h+=`<label class="f"><span>Nơi sản xuất</span><select id="stMode"><option value="inhouse">Xưởng AKOPA</option><option value="outsource">Gia công ngoài</option></select></label><label class="f"><span>Tên xưởng (nếu gia công)</span><input id="stFac"></label>`}
@@ -790,11 +802,11 @@ function openStatus(o,preset,quick){const d=o.design;const vs=(d&&d.versions)||[
     const upd={status:t};const notes=[];
     if(SX_BEFORE.includes(t)&&P){upd.prod=null;upd.prodPrev=(o.prodPrev||[]).concat([Object.assign({},P,{cancelledAt:now})]);notes.push('xóa tiến độ sản xuất')}
     if(t==='Mới'||t==='Chờ duyệt mẫu'){const re=$('#stRe');if(re&&re.checked){const req=($('#stReq').value||'').trim();if(quick&&!req){toast('Ghi rõ khách cần thiết kế thêm gì.');return}
-      const nd=Object.assign({assignee:'',versions:[]},d||{},{state:vs.length?'redo':'working',request:req||(d&&d.request)||'',sentAt:now,sentBy:me||''});delete nd.approvedV;delete nd.approvedAt;
-      if(vs.length&&req){nd.versions=clone(vs);nd.versions[nd.versions.length-1].feedback=req}
+      const nd=Object.assign({assignee:'',versions:[]},d||{},{state:vs.length?'redo':'working',request:req||(d&&d.request)||'',sentAt:now,sentBy:me||''});nd.approvedVs=apvSet(d);delete nd.approvedV;
+      if(vs.length&&req&&!quick&&!nd.approvedVs.includes(vs[vs.length-1].v)){nd.versions=clone(vs);nd.versions[nd.versions.length-1].feedback=req}
       upd.design=nd;notes.push('gửi lại thiết kế'+(req?': '+req:''))}
-      else if(d&&d.state==='approved'&&t==='Chờ duyệt mẫu'){upd.design=Object.assign({},d,{state:'review'});delete upd.design.approvedV}}
-    if(t==='Đã duyệt mẫu'&&vs.length){const v=+$('#stV').value;upd.design=Object.assign({},d,{state:'approved',approvedV:v,approvedAt:now});notes.push('mẫu chốt V'+v)}
+      else if(d&&d.state==='approved'&&t==='Chờ duyệt mẫu'){upd.design=Object.assign({},d,{state:'review'})}}
+    if(t==='Đã duyệt mẫu'&&vs.length){const sel=[...document.querySelectorAll('input[name=stV]:checked')].map(x=>+x.value).sort((a,b)=>a-b);if(!sel.length){toast('Tích ít nhất 1 mẫu khách chốt.');return}upd.design=Object.assign({},d,{state:'approved',approvedVs:sel,approvedAt:now});delete upd.design.approvedV;notes.push('mẫu chốt '+sel.map(v=>'V'+v).join(' + '))}
     if(t==='Đang sản xuất'){const st=+$('#stStage').value;upd.prod=P?Object.assign({},P,{stage:st}):{mode:$('#stMode').value,factory:($('#stFac').value||'').trim(),stage:st,due:'',startedAt:now,stageAt:{}};delete upd.prod.doneAt;notes.push('bước '+(st+1)+' '+STAGES[st])}
     if(t==='Sẵn sàng giao'&&P&&P.stage<STAGES.length){upd.prod=Object.assign({},P,{stage:STAGES.length,doneAt:now})}
     if(t==='Hoàn tất')upd.completedAt=now;
@@ -845,8 +857,9 @@ async function toDataURL(a,max=900){try{const r=await fetch(imgSrc(a));if(!r.ok)
 async function exportPdf(o){if(!downloads){toast('Chế độ xem này không cho tải file.');return}toast('Đang tạo lệnh sản xuất…',30000);
   try{await loadJS('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js');await loadJS('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.min.js');
     const NAVY='#1f2a6b',LINE='#c9cfdc',LAB='#eef0f7';
-    const d=o.design;const fin=chosenV(d);
-    const mock=fin?(await Promise.all(fin.images.filter(isImg).slice(0,4).map(a=>toDataURL(a)))).filter(Boolean):[];
+    const d=o.design;const fin=chosenV(d);const okList=d&&d.state==='approved'?chosenList(d):[];const showList=okList.length?okList:(fin?[fin]:[]);
+    const mockGroups=[];for(const v of showList){const imgs=(await Promise.all(v.images.filter(isImg).slice(0,4).map(a=>toDataURL(a)))).filter(Boolean);if(imgs.length)mockGroups.push({v,imgs})}
+    const mock=mockGroups.flatMap(g=>g.imgs);
     const logos=(await Promise.all(o.logoImages.filter(isImg).slice(0,4).map(a=>toDataURL(a,500)))).filter(Boolean);
     const cell=(t,opt={})=>Object.assign({text:String(t??''),fontSize:9.5},opt);
     const H=t=>({text:t,bold:true,fontSize:11.5,color:NAVY,margin:[0,12,0,5]});
@@ -863,12 +876,12 @@ async function exportPdf(o){if(!downloads){toast('Chế độ xem này không ch
           [cell('Khách hàng',{fillColor:LAB,bold:true}),cell(o.customer.name),cell('Ngày giao khách',{fillColor:LAB,bold:true}),cell(dmy(o.deliveryDate),{bold:true,color:'#b3261e'})],
           [cell('Sale phụ trách',{fillColor:LAB,bold:true}),cell(nameOf(o.salesId)),cell('Xưởng hẹn xong',{fillColor:LAB,bold:true}),cell(o.prod&&o.prod.due?dmy(o.prod.due):'')],
           [cell('Nơi sản xuất',{fillColor:LAB,bold:true}),cell(o.prod?(o.prod.mode==='outsource'?'Gia công: '+(o.prod.factory||''):'Xưởng AKOPA'):'Chưa chuyển SX'),cell('Ngày lập',{fillColor:LAB,bold:true}),cell(dmy(nowISO()))],
-          [cell('Tổng số lượng',{fillColor:LAB,bold:true}),cell(fmt(qtyOf(o))+' áo',{bold:true}),cell('Mẫu thiết kế',{fillColor:LAB,bold:true}),cell(fin?`V${fin.v}${d.state==='approved'?' – khách đã chốt':' – CHƯA CHỐT'}`:'Không có',{color:d&&d.state==='approved'?'#1d7a4b':'#b3261e',bold:true})]]},layout:lay},
+          [cell('Tổng số lượng',{fillColor:LAB,bold:true}),cell(fmt(qtyOf(o))+' áo',{bold:true}),cell('Mẫu thiết kế',{fillColor:LAB,bold:true}),cell(okList.length?okList.map(v=>'V'+v.v).join(' + ')+' – khách đã chốt':fin?`V${fin.v} – CHƯA CHỐT`:'Không có',{color:okList.length?'#1d7a4b':'#b3261e',bold:true})]]},layout:lay},
         H('1. Sản phẩm & số lượng theo size'),
         {table:{headerRows:1,widths:[24,'*'].concat(SIZES.map(()=>24),[28,30]),body:[sizeHead].concat(sizeRows)},layout:lay},
         H('2. In / thêu'),
         o.deco.length?{table:{headerRows:1,widths:[100,90,'*'],body:[['Kỹ thuật','Vị trí','Nội dung / kích thước / màu'].map(t=>cell(t,{bold:true,fillColor:LAB}))].concat(o.deco.map(x=>[cell(x.method),cell(x.position),cell(x.detail)]))},layout:lay}:{text:'Không in/thêu',italics:true},
-        ...(mock.length?[H('3. Mẫu thiết kế đã chốt'),{columns:mock.map(u=>({image:u,fit:[mock.length>1?250:520,mock.length>1?250:340]})),columnGap:10}]:[]),
+        ...(mock.length?[H('3. Mẫu thiết kế '+(okList.length?'đã chốt':'(CHƯA CHỐT)')),...mockGroups.flatMap(g=>[{text:`V${g.v.v}${(d.approvedFor||{})[g.v.v]?' – '+itemLabel(o,d.approvedFor[g.v.v]):''}`,bold:true,fontSize:10,margin:[0,4,0,3]},{columns:g.imgs.map(u=>({image:u,fit:[g.imgs.length>1?250:520,g.imgs.length>1?250:300]})),columnGap:10,margin:[0,0,0,6]}])]:[]),
         ...(logos.length||o.logoLink?[H('Logo khách'),...(logos.length?[{columns:logos.map(u=>({image:u,fit:[120,90]})),columnGap:10}]:[]),...(o.logoLink?[{text:'File gốc: '+o.logoLink,fontSize:9,color:'#1f62a8',margin:[0,4,0,0]}]:[])]:[]),
         ...(names.length?[H(`${mock.length?'4':'3'}. Danh sách in tên / số (${names.length} người)`),{table:{headerRows:1,widths:[24,'*',40,44,40,'*'],body:[['#','Tên in','Số','Size','Mẫu','Ghi chú'].map(t=>cell(t,{bold:true,fillColor:LAB}))].concat(names.map((r,i)=>[cell(i+1),cell(r.name,{bold:true}),cell(r.number,{alignment:'center'}),cell(r.size,{alignment:'center'}),cell('M'+(Math.max(0,o.items.findIndex(x=>x.id===r.item))+1)),cell(r.note)]))},layout:lay}]:[]),
         H('Ghi chú cho xưởng'),{text:o.prodNote||'—',fontSize:10},
