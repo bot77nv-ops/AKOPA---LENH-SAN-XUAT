@@ -168,6 +168,8 @@ fieldset:disabled .calbtn{display:none}
 .tcard .tmain{min-width:0}
 @media (max-width:640px){.tcard{grid-template-columns:minmax(0,1fr)}}
 .bell{border-color:var(--warn);color:var(--warn)}.bell.hot{background:var(--bad);border-color:var(--bad);color:#fff}
+.dlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.dlist li{overflow-wrap:anywhere}
 .vchosen{border-left:3px solid var(--ok);padding-left:8px}
 fieldset:disabled .pastebox,
 fieldset:disabled .addimg,fieldset:disabled .x,fieldset:disabled .rowdel,fieldset:disabled .only-edit{display:none}
@@ -370,7 +372,7 @@ const BANKS=[{label:'Vietcombank 0501000120299 – Giám đốc',bank:'Vietcomba
 const ACCOUNTS=BANKS.map(b=>b.label).concat(['Tiền mặt','Khác']);
 const isBankAcc=a=>BANKS.some(b=>b.label===a);
 function bankInfoText(o){const amt=num(o.deposit);return `Thông tin chuyển khoản đặt cọc đơn ${o.code}:\n${BANKS.map(b=>`• ${b.bank}: ${b.no} (${b.owner})`).join('\n')}${amt?`\nSố tiền cọc: ${fmt(amt)} đ`:''}\nNội dung CK: ${o.code} COC\nCK xong anh/chị gửi giúp AKOPA bill chuyển khoản nhé. Cảm ơn!`}
-async function copyText(t){try{await navigator.clipboard.writeText(t);toast('Đã copy — dán gửi khách qua Zalo/Messenger')}catch(e){showModal(`<h2>Copy thông tin chuyển khoản</h2><textarea id="cpT" style="min-height:160px">${esc(t)}</textarea><p class="hint">Bôi đen rồi copy (Ctrl+C).</p><div class="acts"><button class="btn" id="mX">Đóng</button></div>`);$('#mX').onclick=closeModal;$('#cpT').select()}}
+async function copyText(t){try{await navigator.clipboard.writeText(t);toast('Đã copy — dán gửi khách qua Zalo/Messenger')}catch(e){showModal(`<h2>Copy nội dung</h2><textarea id="cpT" style="min-height:160px">${esc(t)}</textarea><p class="hint">Bôi đen rồi copy (Ctrl+C).</p><div class="acts"><button class="btn" id="mX">Đóng</button></div>`);$('#mX').onclick=closeModal;$('#cpT').select()}}
 function billZone(boxId,arr){const addF=async fs=>{await uploadInto(arr,fs);draw()};
   const draw=()=>{const z=$('#'+boxId);if(!z)return;z.innerHTML=arr.map((a,i)=>`<div class="thumb">${isImg(a)?`<img src="${esc(imgSrc(a))}" alt="bill">`:`<a class="fn" href="${esc(imgSrc(a))}" target="_blank" rel="noopener">${esc(a.name||'file')}</a>`}<button type="button" class="x" data-i="${i}" aria-label="Xóa">×</button></div>`).join('')+`<label class="addimg"><b>+</b>Thêm bill<input type="file" multiple accept="image/*,.pdf"></label><textarea class="pastebox" placeholder="${PASTE_PH}" aria-label="Dán ảnh bill"></textarea>`;
     z.querySelector('input[type=file]').onchange=e=>addF([...e.target.files]);z.querySelectorAll('.x').forEach(b=>b.onclick=()=>{arr.splice(+b.dataset.i,1);draw()});bindPasteBox(z,addF)};
@@ -553,6 +555,67 @@ function renderMine(){const L=myTasks();const red=L.filter(t=>t.lv==='red'),warn
   app.querySelectorAll('[data-to]').forEach(b=>b.onclick=()=>{const o=F(b.dataset.to);if(o)openForm(o,'view')})}
 let greeted=false;
 function greetTasks(){if(greeted||!me||perm().pending)return;const L=myTasks();if(!L.length)return;greeted=true;const r=L.filter(t=>t.lv==='red').length;toast(`Bạn có ${L.length} việc cần làm${r?`, ${r} việc trễ / gấp`:''}. Xem ở mục “Việc của tôi”.`,6000)}
+/* ===== DASHBOARD cuối ngày ===== */
+let dashDay='';
+const dayKey=iso=>{if(!iso)return'';const d=new Date(iso.length===10?iso+'T00:00:00':iso);if(isNaN(d))return'';return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const todayKey=()=>dayKey(new Date().toISOString());
+function dashData(day){const D=day;const on=iso=>dayKey(iso)===D;const act=orders.filter(isActive);
+  const newO=orders.filter(o=>on(o.createdAt));
+  const closed=orders.filter(o=>o.depositConfirm&&on(o.depositConfirm.at));
+  const deps=closed.map(o=>({o,amt:num(o.depositConfirm.amount),acc:o.depositConfirm.account||'Khác'}));
+  const pays=orders.flatMap(o=>o.payments.filter(p=>on(p.at)).map(p=>({o,amt:num(p.amount),acc:p.method||'Khác'})));
+  const byAcc={};deps.concat(pays).forEach(x=>byAcc[x.acc]=(byAcc[x.acc]||0)+x.amt);
+  const startedSX=orders.filter(o=>o.prod&&on(o.prod.startedAt));
+  const delivered=orders.filter(o=>o.delivery&&on(o.delivery.at));
+  const done=orders.filter(o=>on(o.completedAt));
+  const st={};STATUSES.forEach(x=>st[x]=0);orders.forEach(o=>st[o.status]=(st[o.status]||0)+1);
+  const inProd=orders.filter(o=>o.status==='Đang sản xuất'&&o.prod);
+  const khau={start:orders.filter(o=>isActive(o)&&!o.prod&&o.status==='Đã chốt đơn').length,buy:inProd.filter(o=>curKey(o)==='purchase'&&poModes(o).includes('buy')).length,oem:inProd.filter(o=>curKey(o)==='purchase'&&poModes(o).some(m=>m!=='buy')).length,shop:inProd.filter(o=>curKey(o)!=='purchase').length,pet:orders.filter(o=>isActive(o)&&o.petTask&&o.petTask.state!=='received').length};
+  const lateDel=act.filter(o=>o.deliveryDate&&daysTo(o.deliveryDate)<0);
+  const soon=act.filter(o=>o.deliveryDate&&daysTo(o.deliveryDate)>=0&&daysTo(o.deliveryDate)<=3&&o.status!=='Sẵn sàng giao');
+  const tasks=allTasks();const red=tasks.filter(t=>t.lv==='red');const byWho={};red.forEach(t=>{const k=t.who?nameOf(t.who):ROLE_NAME[t.role];byWho[k]=(byWho[k]||0)+1});
+  const openVal=act.reduce((s,o)=>s+total(o),0);const debt=orders.filter(o=>o.status==='Đã giao').reduce((s,o)=>s+Math.max(0,remain(o)),0);
+  const remOpen=act.reduce((s,o)=>s+Math.max(0,remain(o)),0);
+  const bySale={};newO.concat(closed).forEach(o=>{const k=o.salesId?nameOf(o.salesId):'Chưa gán';bySale[k]=bySale[k]||{n:0,nv:0,c:0,cv:0}});newO.forEach(o=>{const k=o.salesId?nameOf(o.salesId):'Chưa gán';bySale[k].n++;bySale[k].nv+=total(o)});closed.forEach(o=>{const k=o.salesId?nameOf(o.salesId):'Chưa gán';bySale[k].c++;bySale[k].cv+=total(o)});
+  const log=orders.flatMap(o=>o.history.filter(h=>on(h.at)).map(h=>({o,h}))).sort((a,b)=>a.h.at<b.h.at?1:-1);
+  return{newO,closed,deps,pays,byAcc,startedSX,delivered,done,st,khau,lateDel,soon,red,byWho,openVal,debt,remOpen,bySale,log,act}}
+function dashText(day,x){return `BÁO CÁO CUỐI NGÀY AKOPA – ${dmy(day)}
+• Đơn mới: ${x.newO.length} (${vnd(x.newO.reduce((s,o)=>s+total(o),0))})
+• Chốt đơn (đã nhận cọc): ${x.closed.length} (${vnd(x.closed.reduce((s,o)=>s+total(o),0))})
+• Tiền về: ${vnd(Object.values(x.byAcc).reduce((a,b)=>a+b,0))}${Object.keys(x.byAcc).length?' — '+Object.entries(x.byAcc).map(([k,v])=>k+': '+vnd(v)).join('; '):''}
+• Bắt đầu SX: ${x.startedSX.length} · Giao khách: ${x.delivered.length} · Hoàn tất: ${x.done.length}
+• Sản xuất: chờ bắt đầu ${x.khau.start} · mua hàng ${x.khau.buy} · đặt OEM ${x.khau.oem} · tại xưởng ${x.khau.shop} · in PET đang làm ${x.khau.pet}
+• Cảnh báo: ${x.lateDel.length} đơn trễ hẹn giao · ${x.soon.length} đơn giao trong 3 ngày chưa xong · ${x.red.length} việc trễ${Object.keys(x.byWho).length?' ('+Object.entries(x.byWho).map(([k,v])=>k+' '+v).join(', ')+')':''}
+• Đơn đang mở: ${x.act.length} (${vnd(x.openVal)}) · còn phải thu ${vnd(x.remOpen)} · công nợ đã giao ${vnd(x.debt)}`}
+function renderDash(){if(!(isBoss()||perm().revenue)){app.innerHTML='<div class="empty"><h3>Chỉ Quản lý xem được Dashboard</h3></div>';return}
+  if(!dashDay)dashDay=todayKey();const x=dashData(dashDay);const sumV=a=>a.reduce((s,o)=>s+total(o),0);const money=Object.values(x.byAcc).reduce((a,b)=>a+b,0);
+  const maxSt=Math.max(1,...Object.values(x.st));
+  const oline=o=>`<li><span class="code">${esc(o.code)}</span> ${esc(o.customer.name)} · ${fmt(qtyOf(o))} áo · ${vnd(total(o))} · <span class="pill" style="${tone(o.status)}">${esc(o.status)}</span>${o.deliveryDate?' · giao '+dmy(o.deliveryDate):''}</li>`;
+  app.innerHTML=`<div class="filters"><div class="f" style="flex:0 0 220px"><span class="flabel">Ngày báo cáo</span>${dateBoxHTML('dashD',dashDay)}</div><button class="btn" id="dashT">Hôm nay</button><button class="btn" id="dashCp">Copy báo cáo (Zalo)</button></div>
+  <div class="stats">
+   <div class="stat"><b>${x.newO.length}</b><small>Đơn mới · ${vnd(sumV(x.newO))}</small></div>
+   <div class="stat"><b>${x.closed.length}</b><small>Chốt đơn (nhận cọc) · ${vnd(sumV(x.closed))}</small></div>
+   <div class="stat"><b>${vnd(money)}</b><small>Tiền về trong ngày</small></div>
+   <div class="stat"><b>${x.delivered.length}</b><small>Giao khách · ${x.done.length} hoàn tất</small></div></div>
+  <div class="stats">
+   <div class="stat${x.lateDel.length?' alert':''}"><b>${x.lateDel.length}</b><small>Đơn trễ hẹn giao</small></div>
+   <div class="stat${x.soon.length?' alert':''}"><b>${x.soon.length}</b><small>Giao ≤ 3 ngày, chưa xong</small></div>
+   <div class="stat${x.red.length?' alert':''}"><b>${x.red.length}</b><small>Việc trễ của nhân viên</small></div>
+   <div class="stat"><b>${vnd(x.debt)}</b><small>Công nợ đã giao</small></div></div>
+  <div class="grid">
+   <section class="sec"><h2>Tiền về theo tài khoản</h2>${Object.keys(x.byAcc).length?`<div class="tblwrap"><table><tbody>${Object.entries(x.byAcc).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num"><b>${vnd(v)}</b></td></tr>`).join('')}</tbody></table></div><p class="hint">Cọc: ${x.deps.length} khoản · Thu thêm: ${x.pays.length} khoản</p>`:'<p class="hint">Không có tiền về.</p>'}</section>
+   <section class="sec"><h2>Sản xuất hiện tại</h2><div class="tblwrap"><table><tbody>
+    <tr><td>Chốt đơn – chờ bắt đầu</td><td class="num">${x.khau.start}</td></tr><tr><td>Mua hàng</td><td class="num">${x.khau.buy}</td></tr><tr><td>Đặt may OEM</td><td class="num">${x.khau.oem}</td></tr><tr><td>Tại xưởng AKOPA</td><td class="num">${x.khau.shop}</td></tr><tr><td>File in PET chưa xong</td><td class="num">${x.khau.pet}</td></tr></tbody></table></div><p class="hint">Bắt đầu SX trong ngày: ${x.startedSX.length}</p></section></div>
+  <section class="sec"><h2>Đơn theo trạng thái <small>tất cả đơn · đang mở ${x.act.length} đơn · ${vnd(x.openVal)} · còn phải thu ${vnd(x.remOpen)}</small></h2><div class="bars">${STATUSES.filter(k=>x.st[k]).map(k=>`<div class="brow" style="grid-template-columns:130px minmax(0,1fr) 40px"><span>${esc(k)}</span><div class="btrack"><div class="bfill" style="width:${(x.st[k]/maxSt*100).toFixed(1)}%;background:var(--${TONE[k]==='accent'?'accent':TONE[k]||'idle'})"></div></div><span class="money">${x.st[k]}</span></div>`).join('')||'<p class="hint">Chưa có đơn.</p>'}</div></section>
+  <div class="grid">
+   <section class="sec"><h2>Theo sale trong ngày</h2>${Object.keys(x.bySale).length?`<div class="tblwrap"><table><thead><tr><th>Sale</th><th class="num">Đơn mới</th><th class="num">Chốt đơn</th></tr></thead><tbody>${Object.entries(x.bySale).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n} · ${vnd(v.nv)}</td><td class="num">${v.c} · ${vnd(v.cv)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="hint">Không có đơn mới / chốt đơn.</p>'}</section>
+   <section class="sec"><h2>Việc trễ theo người</h2>${Object.keys(x.byWho).length?`<div class="tblwrap"><table><tbody>${Object.entries(x.byWho).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num"><b style="color:var(--bad)">${v}</b></td></tr>`).join('')}</tbody></table></div><p class="hint">Chi tiết ở tab “Việc của tôi” → Việc trễ của nhân viên.</p>`:'<p class="hint">Không có việc trễ.</p>'}</section></div>
+  ${x.lateDel.length||x.soon.length?`<section class="sec"><h2>Đơn cần chú ý giao hàng</h2><ul class="dlist">${x.lateDel.map(oline).join('')}${x.soon.map(oline).join('')}</ul></section>`:''}
+  <section class="sec"><h2>Đơn mới & chốt đơn trong ngày</h2>${x.newO.length||x.closed.length?`<ul class="dlist">${[...new Set(x.newO.concat(x.closed))].map(oline).join('')}</ul>`:'<p class="hint">Không có.</p>'}</section>
+  <section class="sec"><h2>Nhật ký hoạt động trong ngày <small>${x.log.length} thao tác</small></h2>${x.log.length?`<ul class="hist">${x.log.slice(0,60).map(({o,h})=>`<li><time>${dt(h.at)}</time><span><span class="code">${esc(o.code)}</span> ${esc(h.text)} · <b>${esc(nameOf(h.by))}</b></span></li>`).join('')}</ul>`:'<p class="hint">Chưa có thao tác nào.</p>'}</section>`;
+  bindDate('dashD',iso=>{if(iso&&iso!==dashDay){dashDay=iso;clearTimeout(renderDash._t);renderDash._t=setTimeout(renderDash,900)}});$('#dashT').onclick=()=>{dashDay=todayKey();renderDash()};
+  $('#dashCp').onclick=()=>{const t=dashText(dashDay,x);navigator.clipboard.writeText(t).then(()=>toast('Đã copy báo cáo')).catch(()=>copyText(t))};
+  bindCards(app)}
 function openDepositClaim(o){const c=o.depositClaim||{};const tmp={imgs:clone(c.imgs||[])};
   showModal(`<h2>Gửi bill cọc cho kế toán · ${esc(o.code)}</h2>
   <p class="hint">Khách gửi bill chuyển khoản / UNC qua Zalo → bấm chuột phải “Sao chép ảnh” → dán vào ô bên dưới (Ctrl+V).</p>
@@ -600,7 +663,7 @@ function perm(o){const t=myTeam();let keys=isBoss()?ALL_KEYS:keysOf(me);
   const P={pending:false,team:t,customer:h('customer'),contact:h('contact'),items:h('items'),money:h('price'),pay:h('payment'),deco:h('deco'),names:h('names'),designView:h('designView'),saleNote:h('saleNote'),prodNote:h('prodNote'),history:h('history'),
     edit:h('edit'),approve:h('approve'),confirmDep:h('confirmDeposit'),purchase:h('purchase'),design:h('designUpload'),prod:h('prodUpdate'),deliver:h('deliver'),status:h('status'),pdf:h('pdf'),revenue:h('revenue')};
   P.full=P.edit;
-  const T=['list'];if(P.design||P.approve||P.edit)T.push('design');if(P.prod||P.edit||P.purchase)T.push('production');if(P.deliver||P.pay||P.confirmDep)T.push('money');if(P.revenue)T.push('revenue');T.push('team');
+  const T=['list'];if(P.design||P.approve||P.edit)T.push('design');if(P.prod||P.edit||P.purchase)T.push('production');if(P.deliver||P.pay||P.confirmDep)T.push('money');if(P.revenue||isBoss())T.push('dash');if(P.revenue)T.push('revenue');T.push('team');
   const home=TEAM_HOME[t];if(home&&T.includes(home)){T.splice(T.indexOf(home),1);T.unshift(home)}T.unshift('mine');
   P.tabs=T;return P}
 const maskMoney=t=>String(t||'').replace(/\d[\d.,]*\s?đ(?!\p{L})/gu,'***');
@@ -667,7 +730,7 @@ function counts(){const a=orders.filter(isActive);
 function renderTabs(){const nav=$('#tabs');if(!db){nav.hidden=true;return}nav.hidden=false;const c=counts();
   const P=perm();const pend=Object.keys(members).filter(id=>!teamOf(id)&&members[id].requestedTeam).length;
   const MT=myTasks();const mRed=MT.filter(x=>x.lv==='red').length;
-  const ALL={mine:['Việc của tôi',MT.length,mRed>0],list:['Đơn hàng',c.urgent,c.urgent>0],design:['Thiết kế',c.design+(P.approve?c.review:0),c.design>0],production:['Sản xuất',c.prod,false],purchase:['Mua hàng',c.purch,c.purch>0],money:['Giao & thu tiền',c.ready+c.debt+(P.confirmDep?c.depWait:0),c.ready>0||(P.confirmDep&&c.depWait>0)],revenue:['Doanh thu',0,false],team:['Nhân sự',canManage?pend:0,canManage&&pend>0]};
+  const ALL={mine:['Việc của tôi',MT.length,mRed>0],list:['Đơn hàng',c.urgent,c.urgent>0],design:['Thiết kế',c.design+(P.approve?c.review:0),c.design>0],production:['Sản xuất',c.prod,false],purchase:['Mua hàng',c.purch,c.purch>0],money:['Giao & thu tiền',c.ready+c.debt+(P.confirmDep?c.depWait:0),c.ready>0||(P.confirmDep&&c.depWait>0)],dash:['Dashboard',0,false],revenue:['Doanh thu',0,false],team:['Nhân sự',canManage?pend:0,canManage&&pend>0]};
   const T=P.tabs.map(k=>[k].concat(ALL[k]));
   const v=view==='form'?'list':view;
   nav.innerHTML=T.map(([k,l,n,hot])=>`<button class="tab${hot?' hot':''}" data-v="${k}"${v===k?' aria-current="page"':''}>${l}${n?`<span class="cnt">${n}</span>`:''}</button>`).join('');
@@ -678,7 +741,7 @@ function rerender(){renderTabs();renderWho();$('#bar').hidden=view!=='form';
   const P=perm();
   if(P.pending){app.innerHTML=`<div class="empty"><h3>Chưa có quyền xem đơn</h3><p>${members[me]?'Quản lý đang duyệt bộ phận của bạn.':'Bấm “Chọn bộ phận” ở góc trên để bắt đầu.'}</p></div>`;$('#bar').hidden=true;return}
   if(view!=='form'&&!P.tabs.includes(view))view=P.tabs[0];
-  if(view==='mine')renderMine();else if(view==='list')renderList();else if(view==='design')renderDesign();else if(view==='production')renderProd();else if(view==='money')renderMoney();else if(view==='revenue')renderRevenue();else if(view==='team')renderTeam();else if(view==='purchase'){view='production';prodFilter='buy';renderProd()}else if(view==='form'){if(mode==='view')renderForm()}}
+  if(view==='mine')renderMine();else if(view==='list')renderList();else if(view==='design')renderDesign();else if(view==='production')renderProd();else if(view==='money')renderMoney();else if(view==='dash')renderDash();else if(view==='revenue')renderRevenue();else if(view==='team')renderTeam();else if(view==='purchase'){view='production';prodFilter='buy';renderProd()}else if(view==='form'){if(mode==='view')renderForm()}}
 
 /* ================= danh sách đơn ================= */
 function cardHTML(o,extra=''){const d=daysTo(o.deliveryDate);const u=urg(o);
