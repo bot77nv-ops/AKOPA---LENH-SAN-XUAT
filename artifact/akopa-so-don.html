@@ -137,6 +137,14 @@ div.f .flabel i{font-style:normal;color:var(--bad)}
 .calquick{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 .calquick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer}
 fieldset:disabled .calbtn{display:none}
+.vpick{display:flex;flex-direction:column;gap:8px}
+.vopt{display:grid;grid-template-columns:auto auto minmax(0,1fr);grid-template-rows:auto auto;gap:4px 10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer}
+.vopt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.vopt input{width:18px;height:18px;accent-color:var(--accent)}
+.vopt .vthumbs{display:flex;gap:6px;grid-row:1/3;grid-column:3}
+.vopt .vthumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.vopt small{grid-column:1/3}
+.vchosen{border-left:3px solid var(--ok);padding-left:8px}
 fieldset:disabled .pastebox,
 fieldset:disabled .addimg,fieldset:disabled .x,fieldset:disabled .rowdel,fieldset:disabled .only-edit{display:none}
 .totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
@@ -637,6 +645,7 @@ function renderBar(){const b=$('#barIn');const o=cur;
   if(isActive(o)||o.status==='Tạm dừng')A.push(['bEdit','Sửa đơn','']);
   if(isActive(o)&&!o.design)A.push(['bDesign','Gửi thiết kế','']);
   if(isActive(o)&&o.design&&o.design.state==='review')A.push(['bApprove','Khách chốt mẫu','primary'],['bRedo','Khách yêu cầu sửa','']);
+  else if(isActive(o)&&o.design&&o.design.state==='redo'&&(o.design.versions||[]).length)A.push(['bApprove','Khách chốt mẫu cũ','']);
   if(isActive(o)&&!o.prod)A.push(['bProd','Chuyển sản xuất','primary']);
   if(o.status==='Sẵn sàng giao')A.push(['bDeliver','Giao hàng','primary']);
   if(o.status!=='Hủy'&&remain(o)>0&&o.code)A.push(['bPay','Thu tiền','']);
@@ -652,7 +661,7 @@ function dLabel(d){return!d?'Chưa gửi thiết kế':{working:'Thiết kế đ
 function designSecHTML(o){const d=o.design;
   return `<section class="sec"><h2>Mẫu thiết kế <small>${esc(dLabel(d))}${d&&d.assignee?' · '+esc(nameOf(d.assignee)):''}</small></h2>
    ${d&&d.request?`<p class="hint" style="margin:0 0 8px">Yêu cầu: ${esc(d.request)}</p>`:''}
-   ${d&&d.versions&&d.versions.length?d.versions.slice().reverse().map(v=>`<div style="margin-bottom:10px"><b>V${v.v}</b> <span class="hint">${dt(v.at)} · ${esc(nameOf(v.by))}${v.note?' · '+esc(v.note):''}${v.feedback?' · <span style="color:var(--bad)">Khách góp ý: '+esc(v.feedback)+'</span>':''}</span><div class="thumbs" style="margin-top:6px">${v.images.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="Mẫu V${v.v}" data-zoom></div>`).join('')}</div></div>`).join(''):'<p class="hint" style="margin:0">Chưa có mẫu.</p>'}
+   ${d&&d.versions&&d.versions.length?d.versions.slice().reverse().map(v=>`<div style="margin-bottom:10px"${d.state==='approved'&&chosenV(d)===v?' class="vchosen"':''}><b>V${v.v}</b>${d.state==='approved'&&chosenV(d)===v?' <span class="pill" style="'+tone('Sẵn sàng giao')+'">✓ Khách chốt</span>':''}${perm().approve&&isActive(o)&&!(d.state==='approved'&&chosenV(d)===v)?` <button type="button" class="btn sm" data-apv="${v.v}">${d.state==='approved'?'Đổi sang bản này':'Khách chốt bản này'}</button>`:''} <span class="hint">${dt(v.at)} · ${esc(nameOf(v.by))}${v.note?' · '+esc(v.note):''}${v.feedback?' · <span style="color:var(--bad)">Khách góp ý: '+esc(v.feedback)+'</span>':''}</span><div class="thumbs" style="margin-top:6px">${v.images.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="Mẫu V${v.v}" data-zoom></div>`).join('')}</div></div>`).join(''):'<p class="hint" style="margin:0">Chưa có mẫu.</p>'}
    ${isActive(o)&&!d?'<button class="btn sm" id="dSend">Gửi bộ phận thiết kế</button>':''}
   </section>`}
 function histSecHTML(o){return `<section class="sec"><h2>Lịch sử &amp; trao đổi</h2>
@@ -660,6 +669,7 @@ function histSecHTML(o){return `<section class="sec"><h2>Lịch sử &amp; trao 
   <ul class="hist">${o.history.slice().reverse().map(h=>`<li><time>${dt(h.at)}</time><span>${esc(perm().money?h.text:maskMoney(h.text))} · <b>${esc(nameOf(h.by))}</b></span></li>`).join('')}</ul></section>`}
 function bindViewExtras(){app.querySelectorAll('img[data-zoom]').forEach(im=>im.onclick=()=>zoom(im.src));
   const s=$('#dSend');if(s)s.onclick=()=>openSendDesign(cur);
+  app.querySelectorAll('[data-apv]').forEach(b=>b.onclick=()=>openApprove(cur,+b.dataset.apv));
   $('#hAdd').onclick=async()=>{const t=$('#hNote').value.trim();if(!t)return;await act(()=>patch(cur,{},'💬 '+t),'Đã ghi')}}
 function designers(){return Object.keys(members).filter(id=>teamOf(id)==='design')}
 function openSendDesign(o){showModal(`<h2>Gửi thiết kế đơn ${esc(o.code)}</h2>
@@ -676,8 +686,13 @@ function openUpload(o){const d=o.design;const v=(d.versions||[]).length+1;const 
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{if(!tmp.imgs.length){toast('Thêm ít nhất 1 ảnh mẫu.');return}
     const nd=Object.assign({},d,{state:'review',versions:(d.versions||[]).concat([{v,images:tmp.imgs,at:nowISO(),by:me||'',note:$('#upNote').value.trim()}])});
     act(()=>patch(o,{design:nd},`Nộp mẫu V${v}`),'Đã gửi mẫu cho sale')}}
-function openApprove(o){showModal(`<h2>Khách đã chốt mẫu V${o.design.versions.length}?</h2><p>Mẫu này sẽ được in vào lệnh sản xuất.</p><div class="acts"><button class="btn" id="mX">Chưa</button><button class="btn primary" id="mOk">Khách đã chốt</button></div>`);
-  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>act(()=>patch(o,{design:Object.assign({},o.design,{state:'approved',approvedAt:nowISO()}),status:'Đã duyệt mẫu'},`Khách chốt mẫu V${o.design.versions.length}`),'Đã chốt mẫu')}
+const chosenV=d=>{if(!d||!d.versions||!d.versions.length)return null;if(d.state==='approved'&&d.approvedV)return d.versions.find(v=>v.v===d.approvedV)||d.versions[d.versions.length-1];return d.versions[d.versions.length-1]};
+function openApprove(o,preV){const vs=o.design.versions||[];const def=preV||(o.design.approvedV)||vs.length;showModal(`<h2>Khách chốt mẫu nào?</h2><p class="hint">Mẫu được chọn sẽ in vào lệnh sản xuất.</p>
+  <div class="vpick">${vs.slice().reverse().map(v=>`<label class="vopt"><input type="radio" name="apv" value="${v.v}"${v.v===def?' checked':''}><b>V${v.v}</b><span class="vthumbs">${v.images.slice(0,3).map(a=>`<img src="${esc(imgSrc(a))}" alt="Mẫu V${v.v}">`).join('')}</span><small class="hint">${dt(v.at)}${v.feedback?' · đã góp ý sửa':''}</small></label>`).join('')}</div>
+  <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Khách chốt mẫu này</button></div>`);
+  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const r=$('input[name=apv]:checked');if(!r){toast('Chọn mẫu khách chốt.');return}const v=+r.value;const was=o.design.state==='approved'?o.design.approvedV:null;
+    const upd={design:Object.assign({},o.design,{state:'approved',approvedV:v,approvedAt:nowISO()})};if(['Mới','Chờ duyệt mẫu'].includes(o.status))upd.status='Đã duyệt mẫu';
+    act(()=>patch(o,upd,was&&was!==v?`Đổi mẫu chốt V${was} → V${v}`:`Khách chốt mẫu V${v}`),`Đã chốt mẫu V${v}`)}}
 function openRedo(o){showModal(`<h2>Khách muốn sửa gì?</h2><textarea id="rTxt" placeholder="VD: logo to hơn, đổi chữ sang màu vàng"></textarea><div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Gửi lại thiết kế</button></div>`);
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const t=$('#rTxt').value.trim();if(!t){toast('Ghi rõ nội dung cần sửa.');return}const d=clone(o.design);d.state='redo';const L=d.versions[d.versions.length-1];if(L)L.feedback=t;act(()=>patch(o,{design:d},'Khách yêu cầu sửa: '+t),'Đã gửi lại thiết kế')}}
 function renderDesign(){const act_=orders.filter(o=>isActive(o)&&o.design);
@@ -792,7 +807,7 @@ async function toDataURL(a,max=900){try{const r=await fetch(imgSrc(a));if(!r.ok)
 async function exportPdf(o){if(!downloads){toast('Chế độ xem này không cho tải file.');return}toast('Đang tạo lệnh sản xuất…',30000);
   try{await loadJS('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js');await loadJS('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.min.js');
     const NAVY='#1f2a6b',LINE='#c9cfdc',LAB='#eef0f7';
-    const d=o.design;const fin=d&&d.versions&&d.versions.length?d.versions[d.versions.length-1]:null;
+    const d=o.design;const fin=chosenV(d);
     const mock=fin?(await Promise.all(fin.images.filter(isImg).slice(0,4).map(a=>toDataURL(a)))).filter(Boolean):[];
     const logos=(await Promise.all(o.logoImages.filter(isImg).slice(0,4).map(a=>toDataURL(a,500)))).filter(Boolean);
     const cell=(t,opt={})=>Object.assign({text:String(t??''),fontSize:9.5},opt);
