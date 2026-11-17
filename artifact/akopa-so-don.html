@@ -115,6 +115,28 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .thumbs[data-zone]{padding:6px;border-radius:10px;border:1.5px solid transparent}
 .thumbs[data-zone].active{border-color:var(--accent-soft)}
 .thumbs.drop{border-color:var(--accent)!important;background:var(--accent-soft)}
+.flabel{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+div.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+div.f .flabel i{font-style:normal;color:var(--bad)}
+.datebox{position:relative;display:flex;gap:6px}
+.datebox input{flex:1 1 auto;min-width:0;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.calbtn{flex:0 0 42px;min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer;display:grid;place-items:center}
+.calbtn:hover{border-color:var(--muted)}
+.calbtn svg{width:18px;height:18px;stroke:var(--fg);fill:none;stroke-width:1.8}
+.datehint{font-size:12.5px;color:var(--muted);min-height:18px}
+.datehint.bad{color:var(--bad);font-weight:600}
+.calpop{position:absolute;top:calc(100% + 6px);right:0;z-index:25;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;width:min(300px,calc(100vw - 32px));box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.calhd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.calhd button{border:0;background:var(--surface-2);border-radius:8px;width:36px;height:32px;font-size:18px;cursor:pointer}
+.calgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
+.calgrid i{font-style:normal;font-size:11px;color:var(--muted);font-weight:700;padding:4px 0}
+.calgrid button{border:0;background:none;border-radius:8px;height:34px;cursor:pointer;font-variant-numeric:tabular-nums}
+.calgrid button:hover{background:var(--accent-soft)}
+.calgrid button.today{outline:1.5px solid var(--accent);outline-offset:-2px}
+.calgrid button.sel{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.calquick{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.calquick button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer}
+fieldset:disabled .calbtn{display:none}
 fieldset:disabled .pastebox,
 fieldset:disabled .addimg,fieldset:disabled .x,fieldset:disabled .rowdel,fieldset:disabled .only-edit{display:none}
 .totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
@@ -204,6 +226,36 @@ function dmy(iso){if(!iso)return'';const d=new Date(iso.length===10?iso+'T00:00:
 function dt(iso){if(!iso)return'';const d=new Date(iso);return pad(d.getDate())+'/'+pad(d.getMonth()+1)+' '+pad(d.getHours())+':'+pad(d.getMinutes())}
 function parseDMY(v){const m=String(v||'').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);if(!m)return'';let[,d,mo,y]=m;if(y.length===2)y='20'+y;const D=new Date(+y,+mo-1,+d);if(D.getDate()!=+d)return'';return D.getFullYear()+'-'+pad(D.getMonth()+1)+'-'+pad(D.getDate())}
 function maskDMY(v){const g=String(v).replace(/\D/g,'').slice(0,8);return g.length>4?g.slice(0,2)+'/'+g.slice(2,4)+'/'+g.slice(4):g.length>2?g.slice(0,2)+'/'+g.slice(2):g}
+/* Ô ngày: gõ tự do (20/12, 20/12/26, 201226…), tự chuẩn hóa khi rời ô; có lịch bấm chọn */
+function parseFlex(v){const t=String(v||'').trim();if(!t)return'';let d,mo,y;
+  const m=t.match(/^(\d{1,2})\s*[\/\-. ]\s*(\d{1,2})(?:\s*[\/\-. ]\s*(\d{2}|\d{4}))?$/);
+  if(m){d=+m[1];mo=+m[2];y=m[3]}else{const g=t.replace(/\D/g,'');if(g.length===4){d=+g.slice(0,2);mo=+g.slice(2,4)}else if(g.length===6||g.length===8){d=+g.slice(0,2);mo=+g.slice(2,4);y=g.slice(4)}else return''}
+  const now=new Date();now.setHours(0,0,0,0);
+  if(!y){y=now.getFullYear();const c=new Date(y,mo-1,d);if(c<now&&(now-c)/864e5>60)y++}else{y=String(y);if(y.length===2)y='20'+y;y=+y}
+  const D=new Date(y,mo-1,d);if(D.getDate()!==d||D.getMonth()!==mo-1||y<2020||y>2100)return'';
+  return D.getFullYear()+'-'+pad(D.getMonth()+1)+'-'+pad(D.getDate())}
+const WD=['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
+function dateHintText(iso){if(!iso)return'';const d=daysTo(iso);const w=WD[new Date(iso+'T00:00:00').getDay()];return `${w}, ${dmy(iso)} · ${d<0?`đã qua ${-d} ngày`:d===0?'hôm nay':`còn ${d} ngày`}`}
+const CAL_SVG='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
+function dateBoxHTML(id,iso,ph){return `<div class="datebox"><input id="${id}" inputmode="numeric" autocomplete="off" placeholder="${esc(ph||'dd/mm/yyyy')}" value="${esc(dmy(iso||''))}"><button type="button" class="calbtn" data-cal="${id}" aria-label="Chọn ngày trên lịch">${CAL_SVG}</button></div><div class="datehint" id="${id}_h">${iso?esc(dateHintText(iso)):''}</div>`}
+function bindDate(id,onSet){const inp=$('#'+id);if(!inp)return;const h=$('#'+id+'_h');
+  const show=(iso,bad)=>{if(!h)return;h.classList.toggle('bad',!!bad);h.textContent=bad?'Ngày chưa đúng. Gõ dạng 20/12/2026, 20/12 hoặc bấm lịch.':iso?dateHintText(iso):''};
+  inp.addEventListener('input',()=>{const iso=parseFlex(inp.value);onSet(iso);show(iso,false)});
+  inp.addEventListener('blur',()=>{const v=inp.value.trim();if(!v){onSet('');show('');return}const iso=parseFlex(v);if(iso){inp.value=dmy(iso);onSet(iso);show(iso)}else{onSet('');show('',true)}});
+  const btn=inp.parentElement.querySelector('.calbtn');btn.onclick=e=>{e.preventDefault();openCal(inp,iso=>{inp.value=dmy(iso);onSet(iso);show(iso)})}}
+function openCal(inp,pick){closeCal();const box=inp.parentElement;let sel=parseFlex(inp.value);const base=sel?new Date(sel+'T00:00:00'):new Date();let y=base.getFullYear(),m=base.getMonth();
+  const pop=document.createElement('div');pop.className='calpop';pop.setAttribute('role','dialog');pop.setAttribute('aria-label','Chọn ngày');box.appendChild(pop);
+  const today=new Date();const tISO=today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate());
+  const draw=()=>{const first=new Date(y,m,1);const off=(first.getDay()+6)%7;const n=new Date(y,m+1,0).getDate();let cells='';
+    for(let i=0;i<off;i++)cells+='<span></span>';
+    for(let d=1;d<=n;d++){const iso=y+'-'+pad(m+1)+'-'+pad(d);cells+=`<button type="button" data-d="${iso}" class="${iso===sel?'sel':''}${iso===tISO?' today':''}">${d}</button>`}
+    pop.innerHTML=`<div class="calhd"><button type="button" data-nav="-1" aria-label="Tháng trước">‹</button><b>Tháng ${m+1}/${y}</b><button type="button" data-nav="1" aria-label="Tháng sau">›</button></div><div class="calgrid">${['T2','T3','T4','T5','T6','T7','CN'].map(x=>`<i>${x}</i>`).join('')}${cells}</div><div class="calquick">${[3,5,7,10,14].map(k=>`<button type="button" data-add="${k}">+${k} ngày</button>`).join('')}</div>`;
+    pop.querySelectorAll('[data-nav]').forEach(b=>b.onclick=e=>{e.stopPropagation();m+=+b.dataset.nav;if(m<0){m=11;y--}if(m>11){m=0;y++}draw()});
+    pop.querySelectorAll('[data-d]').forEach(b=>b.onclick=e=>{e.stopPropagation();pick(b.dataset.d);closeCal()});
+    pop.querySelectorAll('[data-add]').forEach(b=>b.onclick=e=>{e.stopPropagation();const D=new Date();D.setDate(D.getDate()+(+b.dataset.add));pick(D.getFullYear()+'-'+pad(D.getMonth()+1)+'-'+pad(D.getDate()));closeCal()})};
+  draw();setTimeout(()=>document.addEventListener('pointerdown',closeCalOut),0)}
+function closeCalOut(e){if(!e.target.closest('.calpop,.calbtn'))closeCal()}
+function closeCal(){$$('.calpop').forEach(x=>x.parentNode&&x.parentNode.removeChild(x));document.removeEventListener('pointerdown',closeCalOut)}
 function daysTo(s){if(!s)return null;const t=new Date();t.setHours(0,0,0,0);return Math.round((new Date(s+'T00:00:00')-t)/864e5)}
 function toast(m,ms=3200){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,ms)}
 function banner(m){const b=$('#banner');b.hidden=!m;b.textContent=m||''}
@@ -373,7 +425,7 @@ function renderForm(){
     <label class="f"><span>Mã số thuế (nếu xuất hóa đơn)</span><input id="cTax" value="${esc(o.customer.taxId)}"></label>
     <label class="f"><span>Nguồn khách</span><select id="oChannel"><option value="">— chọn —</option>${opts(CHANNELS,o.channel)}</select></label>
     <label class="f"><span>Sale phụ trách</span><select id="oSales">${salesOpts(o.salesId)}</select></label>
-    <label class="f"><span>Ngày hẹn giao <i>*</i></span><input id="oDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" value="${esc(dmy(o.deliveryDate))}"></label>
+    <div class="f"><span class="flabel">Ngày hẹn giao <i>*</i></span>${dateBoxHTML('oDate',o.deliveryDate)}</div>
   </div></section>`:''}
 
   <section class="sec"><h2>Sản phẩm &amp; size <small>nhập số lượng từng size</small></h2>
@@ -471,7 +523,7 @@ function bindFormInputs(){
   Object.entries(map).forEach(([id,[a,k]])=>{$('#'+id).oninput=e=>cur[a][k]=e.target.value});
   $('#oChannel').onchange=e=>cur.channel=e.target.value;$('#oSales').onchange=e=>cur.salesId=e.target.value;$('#oShip').onchange=e=>cur.shipMethod=e.target.value;
   $('#oNote').oninput=e=>cur.note=e.target.value;$('#oLogoLink').oninput=e=>cur.logoLink=e.target.value.trim();$('#oProdNote').oninput=e=>cur.prodNote=e.target.value;
-  $('#oDate').oninput=e=>{e.target.value=maskDMY(e.target.value);cur.deliveryDate=parseDMY(e.target.value)};
+  bindDate('oDate',iso=>cur.deliveryDate=iso);
   [['oDisc','discount'],['oVat','vat'],['oShipFee','shipFee'],['oDeposit','deposit']].forEach(([id,k])=>$('#'+id).oninput=e=>{cur[k]=num(e.target.value);renderTotals()});
   $('#addItem').onclick=()=>{cur.items.push(blankItem());renderItems();renderNames()};
   $('#addDeco').onclick=()=>{cur.deco.push({id:uid(),method:'In lụa',position:'Sau lưng',detail:''});renderDeco()};
@@ -542,7 +594,7 @@ ${text?'\n[Chữ khách gửi]\n'+text.slice(0,12000):''}`;
 }
 
 /* ================= lưu / sửa ================= */
-function validate(o){const m=[];if(!o.customer.name.trim())m.push('tên khách');if(!o.customer.phone.trim())m.push('số điện thoại');if(!o.deliveryDate)m.push('ngày hẹn giao (dd/mm/yyyy)');if(!qtyOf(o))m.push('số lượng áo');
+function validate(o){const m=[];const di=$('#oDate');if(di&&di.value.trim()&&!o.deliveryDate){const iso=parseFlex(di.value);if(iso)o.deliveryDate=iso}if(!o.customer.name.trim())m.push('tên khách');if(!o.customer.phone.trim())m.push('số điện thoại');if(!o.deliveryDate)m.push('ngày hẹn giao (dd/mm/yyyy)');if(!qtyOf(o))m.push('số lượng áo');
   if(m.length){toast('Còn thiếu: '+m.join(', '),4500);return false}return true}
 function payload(o){const p=clone(o);delete p.code;p.names=p.names.filter(r=>r.name||r.number||r.size||r.note);p.qty=qtyOf(o);p.total=total(o);p.searchName=(o.customer.name||'').toLowerCase();return p}
 async function nextCode(){const d=new Date();const prefix='AK'+String(d.getFullYear()).slice(2)+pad(d.getMonth()+1);
@@ -645,10 +697,10 @@ function openToProd(o){const warns=[];if(o.design&&o.design.state!=='approved')w
   showModal(`<h2>Chuyển đơn ${esc(o.code)} sang sản xuất</h2>${warns.length?`<div class="banner" style="margin:0">${warns.join('<br>')}</div>`:''}
   <label class="f"><span>Nơi sản xuất</span><select id="pMode"><option value="inhouse">Xưởng AKOPA</option><option value="outsource">Gia công ngoài</option></select></label>
   <label class="f" id="pFacW" hidden><span>Tên xưởng gia công</span><input id="pFac" placeholder="Tên xưởng"></label>
-  <label class="f"><span>Hẹn xưởng xong (dd/mm/yyyy)</span><input id="pDue" inputmode="numeric" maxlength="10" placeholder="trước ngày giao khách 1–2 ngày"></label>
+  <div class="f"><span class="flabel">Hẹn xưởng xong</span>${dateBoxHTML('pDue','','Nên trước ngày giao khách 1–2 ngày')}</div>
   <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Chuyển sản xuất</button></div>`);
-  $('#pMode').onchange=e=>$('#pFacW').hidden=e.target.value!=='outsource';$('#pDue').oninput=e=>e.target.value=maskDMY(e.target.value);
-  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const m=$('#pMode').value,f=$('#pFac').value.trim();act(()=>patch(o,{prod:{mode:m,factory:f,stage:0,due:parseDMY($('#pDue').value),startedAt:nowISO(),stageAt:{}},status:'Đang sản xuất'},'Chuyển sản xuất'+(m==='outsource'?' – gia công '+f:' – xưởng AKOPA')),'Đã chuyển sản xuất')}}
+  $('#pMode').onchange=e=>$('#pFacW').hidden=e.target.value!=='outsource';let pDueISO='';bindDate('pDue',iso=>pDueISO=iso);
+  $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const m=$('#pMode').value,f=$('#pFac').value.trim();act(()=>patch(o,{prod:{mode:m,factory:f,stage:0,due:pDueISO||parseFlex($('#pDue').value),startedAt:nowISO(),stageAt:{}},status:'Đang sản xuất'},'Chuyển sản xuất'+(m==='outsource'?' – gia công '+f:' – xưởng AKOPA')),'Đã chuyển sản xuất')}}
 async function stageDone(o){const P=clone(o.prod);P.stageAt=P.stageAt||{};P.stageAt[P.stage]={at:nowISO(),by:me||''};const name=STAGES[P.stage];P.stage++;
   const upd={prod:P};if(P.stage>=STAGES.length){upd.status='Sẵn sàng giao';P.doneAt=nowISO()}
   await act(()=>patch(o,upd,'Xong: '+name+(upd.status?' → Sẵn sàng giao':'')),'Đã cập nhật')}
