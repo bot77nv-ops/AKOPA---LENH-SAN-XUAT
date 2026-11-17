@@ -349,7 +349,7 @@ function askNewOpt(type,done){
     if(!ex){customOpts[type].push(label);try{await db.doc('options/'+type+'~'+slugOpt(label)).set({type,label,by:me||'',at:nowISO()})}catch(e){toast('Đã chọn cho đơn này, nhưng chưa lưu được vào danh sách chung: '+(e.message||e.code),5000)}}
     closeModal();done(label);if(!ex)toast(`Đã thêm “${label}” vào danh sách ${OPT_NAME[type]}`)}}
 const SIZES=['XS','S','M','L','XL','2XL','3XL','4XL'];
-const CHANNELS=['Facebook','Zalo','Website','TikTok','Google','Khách quen','Giới thiệu','Khác'];
+const CHANNELS=['Facebook','Zalo','Website','TikTok','Google','Khách cũ','Giới thiệu','Khác'];
 const SHIPS=['Khách đến lấy','AKOPA tự giao','Gửi nhà xe','Viettel Post','GHTK','GHN','J&T','Grab / Ahamove','Khác'];
 const STATUSES=['Mới','Chờ duyệt mẫu','Đã duyệt mẫu','Chờ cọc','Đã chốt đơn','Đang sản xuất','Sẵn sàng giao','Đã giao','Hoàn tất','Tạm dừng','Hủy'];
 const TONE={'Mới':'info','Chờ duyệt mẫu':'warn','Đã duyệt mẫu':'info','Chờ cọc':'hot','Đã chốt đơn':'ok','Đang sản xuất':'accent','Sẵn sàng giao':'ok','Đã giao':'hot','Hoàn tất':'idle','Tạm dừng':'warn','Hủy':'bad'};
@@ -436,7 +436,7 @@ function blank(){return{code:'',status:'Mới',channel:'',salesId:'',customer:{n
   items:[blankItem()],deco:[{id:uid(),method:'In lụa',position:'Ngực trái',detail:''}],logoImages:[],refImages:[],listFiles:[],names:[],
   deliveryDate:'',shipMethod:'',shipFee:0,discount:0,vat:0,deposit:0,depositPaid:0,payments:[],note:'',prodNote:'',
   design:null,prod:null,delivery:null,history:[]}}
-function normalize(o){if(o&&o.status==='Đã cọc')o=Object.assign({},o,{status:'Đã chốt đơn'});const b=blank();const r=Object.assign(b,o||{});if(o&&!('depositPaid' in o))delete r.depositPaid;r.customer=Object.assign(blank().customer,r.customer||{});
+function normalize(o){if(o&&o.status==='Đã cọc')o=Object.assign({},o,{status:'Đã chốt đơn'});if(o&&o.channel==='Khách quen')o=Object.assign({},o,{channel:'Khách cũ'});const b=blank();const r=Object.assign(b,o||{});if(o&&!('depositPaid' in o))delete r.depositPaid;r.customer=Object.assign(blank().customer,r.customer||{});
   ['items','deco','logoImages','refImages','listFiles','names','payments','history','prodPrev'].forEach(k=>{if(!Array.isArray(r[k]))r[k]=[]});
   if(!r.items.length)r.items=[blankItem()];r.items.forEach(i=>{if(!i.sizes||typeof i.sizes!=='object')i.sizes={}});syncProd(r);return r}
 /* Nếu nguồn hàng đổi (hoặc đơn vào SX theo quy trình cũ), tính lại các bước, giữ bước đã xong thật */
@@ -791,7 +791,7 @@ function custSuggest(inp){const box=inp.parentElement;let sg=box.querySelector('
     ['cName','cContact','cPhone','cAddr','cTax'].forEach((id,j)=>{const el=$('#'+id);if(el)el.value=[c.name,c.contact,c.phone,c.address,c.taxId][j]||''});const ch=$('#oChannel');if(ch&&cur.channel)ch.value=cur.channel;sg.remove();custHint()});
   inp.onblur=()=>setTimeout(()=>{const x=box.querySelector('.sugg');if(x)x.remove();custHint()},150)}
 function custHint(){const el=$('#custHint')||(()=>{const d=document.createElement('div');d.id='custHint';d.className='hint full';const g=$('#cName')&&$('#cName').closest('.grid');if(g)g.appendChild(d);return d})();if(!el)return;const k=pkey(cur.customer.phone);const c=k?customers().find(x=>x.key===k):null;
-  const n=c?c.orders.filter(x=>x.code!==cur.code).length:0;el.innerHTML=c&&n?`<span class="pill" style="${tone('Đã duyệt mẫu')}">Khách quen</span> ${n} đơn trước${perm().money?' · tổng '+vnd(c.orders.filter(x=>x.code!==cur.code).reduce((s,o)=>s+total(o),0)):''} · lần cuối ${dmy(c.last)}`:''}
+  const n=c?c.orders.filter(x=>x.code!==cur.code).length:0;el.innerHTML=c&&n?`<span class="pill" style="${tone('Đã duyệt mẫu')}">Khách cũ</span> ${n} đơn trước${perm().money?' · tổng '+vnd(c.orders.filter(x=>x.code!==cur.code).reduce((s,o)=>s+total(o),0)):''} · lần cuối ${dmy(c.last)}`:''}
 let custQ='',custF='all';
 function renderCustomers(){const P=perm();const all=customers();const q=lc(custQ).trim();const qd=pkey(custQ);
   let L=all.filter(c=>!q||lc(c.name).includes(q)||(qd.length>=3&&c.key.includes(qd))||lc(c.contact||'').includes(q));if(custF==='care')L=L.filter(c=>c.needCare);if(custF==='active')L=L.filter(c=>c.active);if(custF==='repeat')L=L.filter(c=>c.orders.length>1);
