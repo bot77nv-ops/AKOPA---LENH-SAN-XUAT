@@ -9,6 +9,7 @@
   --accent:#2b3a8f; --accent-ink:#ffffff; --accent-soft:#e3e7f8;
   --ok:#1d7a4b; --ok-soft:#dcf1e6; --warn:#985f00; --warn-soft:#fbeed3; --bad:#b3261e; --bad-soft:#fbe0de;
   --info:#1f62a8; --info-soft:#dfeafa; --idle:#5b6478; --idle-soft:#e6e9f0; --hot:#d9480f; --hot-soft:#ffe5d6;
+  --v1:#2a78d6; --v2:#eb6834; --v3:#1baf7a; --v4:#eda100; --v5:#e87ba4;
   --f-display:"Archivo","Arial Narrow",system-ui,sans-serif;
   --f-body:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -19,12 +20,14 @@
   --accent:#8fa0ff; --accent-ink:#0b1030; --accent-soft:#232c55;
   --ok:#5fd09a; --ok-soft:#163427; --warn:#f2b54a; --warn-soft:#382b12; --bad:#ff8a80; --bad-soft:#3d1b1a;
   --info:#82b4ff; --info-soft:#172948; --idle:#98a1b6; --idle-soft:#232b3d; --hot:#ff9a5c; --hot-soft:#3d2314;
+  --v1:#3987e5; --v2:#d95926; --v3:#199e70; --v4:#c98500; --v5:#d55181;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0d111c; --surface:#161c2b; --surface-2:#1c2335; --line:#2a3349; --fg:#e6e9f2; --muted:#98a1b6;
   --accent:#8fa0ff; --accent-ink:#0b1030; --accent-soft:#232c55;
   --ok:#5fd09a; --ok-soft:#163427; --warn:#f2b54a; --warn-soft:#382b12; --bad:#ff8a80; --bad-soft:#3d1b1a;
   --info:#82b4ff; --info-soft:#172948; --idle:#98a1b6; --idle-soft:#232b3d; --hot:#ff9a5c; --hot-soft:#3d2314;
+  --v1:#3987e5; --v2:#d95926; --v3:#199e70; --v4:#c98500; --v5:#d55181;
   color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -170,6 +173,81 @@ fieldset:disabled .calbtn{display:none}
 .bell{border-color:var(--warn);color:var(--warn)}.bell.hot{background:var(--bad);border-color:var(--bad);color:#fff}
 .dlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
 .dlist li{overflow-wrap:anywhere}
+.dz{position:relative;display:flex;flex-direction:column;gap:12px}
+.dhero{position:relative;overflow:hidden;border-radius:16px;padding:18px;background:linear-gradient(135deg,#18225f 0%,#2b3a8f 55%,#4054c2 100%);color:#fff}
+.dhero>*:not(.dhero-geo){position:relative}
+.dhero-geo span{position:absolute;background:rgba(255,255,255,.08)}
+.dhero-geo span:nth-child(1){width:200px;height:200px;border-radius:50%;right:-60px;top:-80px}
+.dhero-geo span:nth-child(2){width:110px;height:110px;border-radius:18px;transform:rotate(28deg);left:38%;bottom:-60px}
+.dhero-geo span:nth-child(3){width:140px;height:120px;clip-path:polygon(50% 0,100% 100%,0 100%);right:24%;top:-30px;background:rgba(255,255,255,.06)}
+.dhero-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.dhero-k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.8}
+.dhero-d{font:800 26px/1.1 var(--f-display)}
+.dhero-ctl{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.dhero-ctl .datebox input{color:var(--fg)}
+.dhero .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);color:#fff}
+.dhero .btn:hover{background:rgba(255,255,255,.2)}
+.dhero .datehint{color:rgba(255,255,255,.75)}
+.kpis{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.45fr) minmax(0,1fr);gap:10px;margin-top:14px}
+.kpi{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:12px;min-width:0}
+.kpi>div{min-width:0}
+.kpi b{display:block;font:800 24px/1.1 var(--f-display);font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi.wide b{font-size:22px}
+.kpi span{display:block;font-size:12.5px;opacity:.92}
+.kpi small{display:block;font-size:11.5px;opacity:.72;overflow-wrap:anywhere}
+.gico{width:34px;height:34px;flex:0 0 34px}.gico *{fill:var(--c)}
+.dgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.dcard h3{font-size:17px;margin:0 0 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
+.dcard h3 small{font:500 12px var(--f-body);color:var(--muted)}
+.donutwrap{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.donut{width:160px;height:160px;flex:0 0 160px;max-width:100%}
+.dbig{font:800 17px var(--f-display);fill:var(--fg)}.dsmall{font-size:11px;fill:var(--muted)}
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;flex:1 1 180px;min-width:0;font-size:13px}
+.legend li{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:8px;align-items:center}
+.legend li span{overflow-wrap:anywhere}
+.legend i{width:12px;height:12px;border-radius:3px;display:block}
+.legend.inline{flex-direction:row;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend.inline li{grid-template-columns:12px auto}
+.sparkrow{display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+.spark{width:100%;height:auto;display:block}
+.sxl{font-size:10px;fill:var(--muted)}.svl{font-size:11px;font-weight:700;fill:var(--fg)}
+.slab{font-size:12px;font-weight:600;color:var(--muted)}
+.flow{display:flex;gap:3px;overflow-x:auto;padding-bottom:4px}
+.chev{flex:1 0 76px;min-height:68px;padding:8px 14px 8px 21px;clip-path:polygon(0 0,calc(100% - 13px) 0,100% 50%,calc(100% - 13px) 100%,0 100%,13px 50%);background:color-mix(in oklab,var(--v1) var(--p),var(--surface-2));display:flex;flex-direction:column;justify-content:center;color:var(--fg)}
+.chev:first-child{clip-path:polygon(0 0,calc(100% - 13px) 0,100% 50%,calc(100% - 13px) 100%,0 100%);padding-left:14px;border-radius:8px 0 0 8px}
+.chev.hi{color:#fff}.chev.zero{opacity:.6}
+.chev b{font:800 20px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.chev span{font-size:11px;line-height:1.2;margin-top:4px}
+.nodes{display:flex;align-items:flex-start}
+.node{display:flex;flex-direction:column;align-items:center;gap:8px;flex:0 0 auto;width:72px;text-align:center;font-size:12px;color:var(--muted)}
+.nline{flex:1 1 auto;height:2px;background:var(--line);margin-top:28px;min-width:8px}
+.nshape{width:56px;height:56px;display:grid;place-items:center;background:var(--surface-2);border:2px solid var(--line);color:var(--fg)}
+.nshape b{font:800 20px var(--f-display)}
+.nshape.circle{border-radius:50%}.nshape.square{border-radius:12px}
+.nshape.diamond{width:44px;height:44px;margin:6px;border-radius:10px;transform:rotate(45deg)}.nshape.diamond b{transform:rotate(-45deg)}
+.nshape.hex{border:0;clip-path:polygon(25% 4%,75% 4%,100% 50%,75% 96%,25% 96%,0 50%);background:var(--line)}
+.nshape.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.hexes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.hexw{display:flex;align-items:center;gap:10px;font-size:13px;min-width:0}
+.hexs{width:60px;height:54px;flex:0 0 60px;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);display:grid;place-items:center;background:var(--t-soft);color:var(--t)}
+.hexs b{font:800 22px var(--f-display)}
+.hexw.bad{--t:var(--bad);--t-soft:var(--bad-soft)}.hexw.warn{--t:var(--warn);--t-soft:var(--warn-soft)}.hexw.info{--t:var(--info);--t-soft:var(--info-soft)}.hexw.okk{--t:var(--ok);--t-soft:var(--ok-soft)}
+.hbars{display:flex;flex-direction:column;gap:10px}
+.hb{display:grid;grid-template-columns:90px minmax(0,1fr);gap:4px 10px;align-items:center;font-size:13px}
+.hbn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbt{display:flex;flex-direction:column;gap:2px}
+.hbf{height:10px;border-radius:0 4px 4px 0;min-width:2px}
+.hbv{grid-column:2;font-size:11.5px;color:var(--muted)}
+.dotrow{display:grid;grid-template-columns:90px minmax(0,1fr) 28px;gap:10px;align-items:center;font-size:13px;margin-bottom:8px}
+.dotset{display:flex;gap:4px;flex-wrap:wrap;align-items:center}.dotset i{width:12px;height:12px;border-radius:50%;background:var(--bad)}.dotset em{font-size:11px;color:var(--muted);font-style:normal}
+.okbig{padding:18px;border-radius:12px;background:var(--ok-soft);color:var(--ok);font-weight:700;text-align:center}
+.tl{list-style:none;margin:0;padding:0 0 0 16px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:8px;font-size:13px;max-height:420px;overflow:auto}
+.tl li{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px}
+.tl li::before{content:"";position:absolute;left:-22px;top:5px;width:9px;height:9px;border-radius:2px;transform:rotate(45deg);background:var(--accent)}
+.tl time{color:var(--muted);font-variant-numeric:tabular-nums}
+.tip{position:absolute;z-index:5;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12px;padding:6px 9px;border-radius:6px;max-width:260px}
+@media (max-width:640px){.dgrid{grid-template-columns:minmax(0,1fr)}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi{padding:10px;gap:8px}.kpi b{font-size:20px}.kpi.wide b{font-size:17px}.gico{width:26px;height:26px;flex-basis:26px}.donutwrap{justify-content:center}.hexes{grid-template-columns:minmax(0,1fr)}.node{width:60px}.nshape{width:48px;height:48px}.nshape.diamond{width:38px;height:38px}.nline{margin-top:24px}}
 .vchosen{border-left:3px solid var(--ok);padding-left:8px}
 fieldset:disabled .pastebox,
 fieldset:disabled .addimg,fieldset:disabled .x,fieldset:disabled .rowdel,fieldset:disabled .only-edit{display:none}
@@ -587,35 +665,76 @@ function dashText(day,x){return `BÁO CÁO CUỐI NGÀY AKOPA – ${dmy(day)}
 • Sản xuất: chờ bắt đầu ${x.khau.start} · mua hàng ${x.khau.buy} · đặt OEM ${x.khau.oem} · tại xưởng ${x.khau.shop} · in PET đang làm ${x.khau.pet}
 • Cảnh báo: ${x.lateDel.length} đơn trễ hẹn giao · ${x.soon.length} đơn giao trong 3 ngày chưa xong · ${x.red.length} việc trễ${Object.keys(x.byWho).length?' ('+Object.entries(x.byWho).map(([k,v])=>k+' '+v).join(', ')+')':''}
 • Đơn đang mở: ${x.act.length} (${vnd(x.openVal)}) · còn phải thu ${vnd(x.remOpen)} · công nợ đã giao ${vnd(x.debt)}`}
+/* ---- hình học cho Dashboard ---- */
+const GEO={
+  tile:(sh)=>({circle:'<circle cx="16" cy="16" r="12"/>',square:'<rect x="5" y="5" width="22" height="22" rx="5"/>',tri:'<path d="M16 4 L29 27 H3 Z"/>',hex:'<path d="M16 3 L28 10 V22 L16 29 L4 22 V10 Z"/>',diamond:'<path d="M16 3 L29 16 L16 29 L3 16 Z"/>'}[sh]),
+  icon:(sh,c)=>`<svg class="gico" viewBox="0 0 32 32" aria-hidden="true" style="--c:${c}">${GEO.tile(sh)}</svg>`};
+function donutSVG(segs,big,small){const tot=segs.reduce((s,x)=>s+x.v,0);const R=62,C=2*Math.PI*R;let off=0;const gap=tot>0&&segs.filter(s=>s.v>0).length>1?3:0;
+  const arcs=tot>0?segs.filter(s=>s.v>0).map(s=>{const len=Math.max(0,s.v/tot*C-gap);const el=`<circle cx="80" cy="80" r="${R}" fill="none" stroke="${s.c}" stroke-width="20" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 80 80)" data-tip="${esc(s.l)}: ${esc(vnd(s.v))} (${Math.round(s.v/tot*100)}%)"><title>${esc(s.l)}: ${esc(vnd(s.v))}</title></circle>`;off+=s.v/tot*C;return el}).join(''):`<circle cx="80" cy="80" r="${R}" fill="none" stroke="var(--line)" stroke-width="20"/>`;
+  return `<svg viewBox="0 0 160 160" class="donut" role="img" aria-label="${esc(small)}">${arcs}<text x="80" y="76" text-anchor="middle" class="dbig">${esc(big)}</text><text x="80" y="96" text-anchor="middle" class="dsmall">${esc(small)}</text></svg>`}
+function barsSVG(vals,labels,fmtv,color,title){const W=300,H=96,pb=20,pt=16,n=vals.length,bw=Math.min(28,(W/n)*0.55),mx=Math.max(1,...vals);
+  return `<svg viewBox="0 0 ${W} ${H}" class="spark" role="img" aria-label="${esc(title)}"><line x1="0" x2="${W}" y1="${H-pb}" y2="${H-pb}" stroke="var(--line)"/>${vals.map((v,i)=>{const cx=(i+0.5)*(W/n);const h=v>0?Math.max(3,(H-pb-pt)*v/mx):0;const y=H-pb-h;
+    return `<g data-tip="${esc(labels[i])}: ${esc(fmtv(v))}"><rect x="${cx-bw/2-4}" y="${pt-4}" width="${bw+8}" height="${H-pb-pt+8}" fill="transparent"/>${h?`<path d="M${cx-bw/2},${H-pb} V${y+4} Q${cx-bw/2},${y} ${cx-bw/2+4},${y} H${cx+bw/2-4} Q${cx+bw/2},${y} ${cx+bw/2},${y+4} V${H-pb} Z" fill="${i===n-1?color:`color-mix(in oklab, ${color} 45%, var(--surface))`}"/>`:''}${i===n-1&&v?`<text x="${cx}" y="${y-4}" text-anchor="middle" class="svl">${esc(fmtv(v))}</text>`:''}<text x="${cx}" y="${H-6}" text-anchor="middle" class="sxl">${esc(labels[i])}</text></g>`}).join('')}</svg>`}
+function lastDays(n,endKey){const out=[];const e=new Date(endKey+'T12:00:00');for(let i=n-1;i>=0;i--){const d=new Date(e);d.setDate(e.getDate()-i);out.push(d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()))}return out}
 function renderDash(){if(!(isBoss()||perm().revenue)){app.innerHTML='<div class="empty"><h3>Chỉ Quản lý xem được Dashboard</h3></div>';return}
   if(!dashDay)dashDay=todayKey();const x=dashData(dashDay);const sumV=a=>a.reduce((s,o)=>s+total(o),0);const money=Object.values(x.byAcc).reduce((a,b)=>a+b,0);
-  const maxSt=Math.max(1,...Object.values(x.st));
+  const SER=['var(--v1)','var(--v2)','var(--v3)','var(--v4)','var(--v5)'];
+  /* tiền về theo tài khoản */
+  const accs=Object.entries(x.byAcc).sort((a,b)=>b[1]-a[1]);const top=accs.slice(0,4);if(accs.length>4)top.push(['Khác',accs.slice(4).reduce((s,a)=>s+a[1],0)]);
+  const segs=top.map(([l,v],i)=>({l,v,c:SER[i]}));
+  /* 7 ngày */
+  const days=lastDays(7,dashDay);const dl=days.map(k=>k.slice(8)+'/'+k.slice(5,7));
+  const d7=days.map(k=>dashData(k));
+  /* đường đi đơn hàng */
+  const FLOW=['Mới','Chờ duyệt mẫu','Đã duyệt mẫu','Chờ cọc','Đã chốt đơn','Đang sản xuất','Sẵn sàng giao','Đã giao','Hoàn tất'];
+  const fmax=Math.max(1,...FLOW.map(k=>x.st[k]||0));
+  /* khâu sản xuất */
+  const KH=[['start','Chờ bắt đầu','circle'],['buy','Mua hàng','square'],['oem','Đặt OEM','diamond'],['shop','Tại xưởng','hex']];
+  const warn=[{n:x.lateDel.length,l:'Đơn trễ hẹn giao',t:'bad'},{n:x.soon.length,l:'Giao ≤ 3 ngày chưa xong',t:'warn'},{n:x.red.length,l:'Việc trễ của nhân viên',t:'bad'},{n:x.khau.pet,l:'File in PET chưa xong',t:'info'}];
+  const saleRows=Object.entries(x.bySale).sort((a,b)=>(b[1].nv+b[1].cv)-(a[1].nv+a[1].cv));const smax=Math.max(1,...saleRows.map(([,v])=>Math.max(v.nv,v.cv)));
+  const whoRows=Object.entries(x.byWho).sort((a,b)=>b[1]-a[1]);const wmax=Math.max(1,...whoRows.map(r=>r[1]));
   const oline=o=>`<li><span class="code">${esc(o.code)}</span> ${esc(o.customer.name)} · ${fmt(qtyOf(o))} áo · ${vnd(total(o))} · <span class="pill" style="${tone(o.status)}">${esc(o.status)}</span>${o.deliveryDate?' · giao '+dmy(o.deliveryDate):''}</li>`;
-  app.innerHTML=`<div class="filters"><div class="f" style="flex:0 0 220px"><span class="flabel">Ngày báo cáo</span>${dateBoxHTML('dashD',dashDay)}</div><button class="btn" id="dashT">Hôm nay</button><button class="btn" id="dashCp">Copy báo cáo (Zalo)</button></div>
-  <div class="stats">
-   <div class="stat"><b>${x.newO.length}</b><small>Đơn mới · ${vnd(sumV(x.newO))}</small></div>
-   <div class="stat"><b>${x.closed.length}</b><small>Chốt đơn (nhận cọc) · ${vnd(sumV(x.closed))}</small></div>
-   <div class="stat"><b>${vnd(money)}</b><small>Tiền về trong ngày</small></div>
-   <div class="stat"><b>${x.delivered.length}</b><small>Giao khách · ${x.done.length} hoàn tất</small></div></div>
-  <div class="stats">
-   <div class="stat${x.lateDel.length?' alert':''}"><b>${x.lateDel.length}</b><small>Đơn trễ hẹn giao</small></div>
-   <div class="stat${x.soon.length?' alert':''}"><b>${x.soon.length}</b><small>Giao ≤ 3 ngày, chưa xong</small></div>
-   <div class="stat${x.red.length?' alert':''}"><b>${x.red.length}</b><small>Việc trễ của nhân viên</small></div>
-   <div class="stat"><b>${vnd(x.debt)}</b><small>Công nợ đã giao</small></div></div>
-  <div class="grid">
-   <section class="sec"><h2>Tiền về theo tài khoản</h2>${Object.keys(x.byAcc).length?`<div class="tblwrap"><table><tbody>${Object.entries(x.byAcc).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num"><b>${vnd(v)}</b></td></tr>`).join('')}</tbody></table></div><p class="hint">Cọc: ${x.deps.length} khoản · Thu thêm: ${x.pays.length} khoản</p>`:'<p class="hint">Không có tiền về.</p>'}</section>
-   <section class="sec"><h2>Sản xuất hiện tại</h2><div class="tblwrap"><table><tbody>
-    <tr><td>Chốt đơn – chờ bắt đầu</td><td class="num">${x.khau.start}</td></tr><tr><td>Mua hàng</td><td class="num">${x.khau.buy}</td></tr><tr><td>Đặt may OEM</td><td class="num">${x.khau.oem}</td></tr><tr><td>Tại xưởng AKOPA</td><td class="num">${x.khau.shop}</td></tr><tr><td>File in PET chưa xong</td><td class="num">${x.khau.pet}</td></tr></tbody></table></div><p class="hint">Bắt đầu SX trong ngày: ${x.startedSX.length}</p></section></div>
-  <section class="sec"><h2>Đơn theo trạng thái <small>tất cả đơn · đang mở ${x.act.length} đơn · ${vnd(x.openVal)} · còn phải thu ${vnd(x.remOpen)}</small></h2><div class="bars">${STATUSES.filter(k=>x.st[k]).map(k=>`<div class="brow" style="grid-template-columns:130px minmax(0,1fr) 40px"><span>${esc(k)}</span><div class="btrack"><div class="bfill" style="width:${(x.st[k]/maxSt*100).toFixed(1)}%;background:var(--${TONE[k]==='accent'?'accent':TONE[k]||'idle'})"></div></div><span class="money">${x.st[k]}</span></div>`).join('')||'<p class="hint">Chưa có đơn.</p>'}</div></section>
-  <div class="grid">
-   <section class="sec"><h2>Theo sale trong ngày</h2>${Object.keys(x.bySale).length?`<div class="tblwrap"><table><thead><tr><th>Sale</th><th class="num">Đơn mới</th><th class="num">Chốt đơn</th></tr></thead><tbody>${Object.entries(x.bySale).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n} · ${vnd(v.nv)}</td><td class="num">${v.c} · ${vnd(v.cv)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="hint">Không có đơn mới / chốt đơn.</p>'}</section>
-   <section class="sec"><h2>Việc trễ theo người</h2>${Object.keys(x.byWho).length?`<div class="tblwrap"><table><tbody>${Object.entries(x.byWho).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num"><b style="color:var(--bad)">${v}</b></td></tr>`).join('')}</tbody></table></div><p class="hint">Chi tiết ở tab “Việc của tôi” → Việc trễ của nhân viên.</p>`:'<p class="hint">Không có việc trễ.</p>'}</section></div>
-  ${x.lateDel.length||x.soon.length?`<section class="sec"><h2>Đơn cần chú ý giao hàng</h2><ul class="dlist">${x.lateDel.map(oline).join('')}${x.soon.map(oline).join('')}</ul></section>`:''}
-  <section class="sec"><h2>Đơn mới & chốt đơn trong ngày</h2>${x.newO.length||x.closed.length?`<ul class="dlist">${[...new Set(x.newO.concat(x.closed))].map(oline).join('')}</ul>`:'<p class="hint">Không có.</p>'}</section>
-  <section class="sec"><h2>Nhật ký hoạt động trong ngày <small>${x.log.length} thao tác</small></h2>${x.log.length?`<ul class="hist">${x.log.slice(0,60).map(({o,h})=>`<li><time>${dt(h.at)}</time><span><span class="code">${esc(o.code)}</span> ${esc(h.text)} · <b>${esc(nameOf(h.by))}</b></span></li>`).join('')}</ul>`:'<p class="hint">Chưa có thao tác nào.</p>'}</section>`;
+  const isToday=dashDay===todayKey();
+  app.innerHTML=`<div class="dz">
+  <div class="dhero"><div class="dhero-geo" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="dhero-top"><div><div class="dhero-k">Báo cáo ${isToday?'hôm nay':'ngày'}</div><div class="dhero-d">${WD[new Date(dashDay+'T00:00:00').getDay()]}, ${dmy(dashDay)}</div></div>
+    <div class="dhero-ctl"><div class="f" style="min-width:0"><span class="flabel" style="color:inherit;opacity:.8">Chọn ngày</span>${dateBoxHTML('dashD',dashDay)}</div><button class="btn sm" id="dashT">Hôm nay</button><button class="btn sm" id="dashCp">Copy báo cáo (Zalo)</button></div></div>
+    <div class="kpis">
+     <div class="kpi">${GEO.icon('circle','var(--v1)')}<div><b>${x.newO.length}</b><span>Đơn mới</span><small>${vnd(sumV(x.newO))}</small></div></div>
+     <div class="kpi">${GEO.icon('diamond','var(--v3)')}<div><b>${x.closed.length}</b><span>Chốt đơn (đã cọc)</span><small>${vnd(sumV(x.closed))}</small></div></div>
+     <div class="kpi wide">${GEO.icon('hex','var(--v4)')}<div><b>${vnd(money)}</b><span>Tiền về trong ngày</span><small>${x.deps.length} khoản cọc · ${x.pays.length} khoản thu</small></div></div>
+     <div class="kpi">${GEO.icon('tri','var(--v2)')}<div><b>${x.delivered.length}</b><span>Giao khách</span><small>${x.done.length} hoàn tất</small></div></div>
+    </div></div>
+  <div class="dgrid">
+   <section class="dcard"><h3>Tiền về theo tài khoản</h3><div class="donutwrap">${donutSVG(segs,money?vnd(money).replace(' đ',''):'0','đồng')}
+     <ul class="legend">${segs.length?segs.map(s=>`<li><i style="background:${s.c}"></i><span>${esc(s.l)}</span><b>${vnd(s.v)}</b></li>`).join(''):'<li class="hint">Chưa có tiền về trong ngày.</li>'}</ul></div></section>
+   <section class="dcard"><h3>7 ngày gần nhất</h3>
+     <div class="sparkrow"><div><div class="slab">Đơn mới</div>${barsSVG(d7.map(d=>d.newO.length),dl,v=>String(v),'var(--v1)','Đơn mới 7 ngày')}</div>
+     <div><div class="slab">Tiền về</div>${barsSVG(d7.map(d=>Object.values(d.byAcc).reduce((a,b)=>a+b,0)),dl,v=>v>=1e6?(v/1e6).toFixed(v>=1e7?0:1).replace('.',',')+' tr':fmt(v),'var(--v3)','Tiền về 7 ngày')}</div></div></section>
+  </div>
+  <section class="dcard"><h3>Đường đi của đơn hàng <small>${x.act.length} đơn đang mở · ${vnd(x.openVal)} · còn phải thu ${vnd(x.remOpen)}</small></h3>
+   <div class="flow">${FLOW.map((k,i)=>{const n=x.st[k]||0;const p=Math.round(18+82*n/fmax);return `<div class="chev${n?'':' zero'}${p>=58?' hi':''}" style="--p:${p}%" data-tip="${esc(k)}: ${n} đơn"><b>${n}</b><span>${esc(k)}</span></div>`}).join('')}</div>
+   ${x.st['Hủy']||x.st['Tạm dừng']?`<p class="hint" style="margin:8px 0 0">Ngoài luồng: ${x.st['Tạm dừng']||0} tạm dừng · ${x.st['Hủy']||0} hủy</p>`:''}</section>
+  <div class="dgrid">
+   <section class="dcard"><h3>Sản xuất theo khâu</h3><div class="nodes">${KH.map(([k,l,sh],i)=>`<div class="node"><div class="nshape ${sh}${x.khau[k]?' on':''}"><b>${x.khau[k]}</b></div><span>${l}</span></div>${i<KH.length-1?'<div class="nline" aria-hidden="true"></div>':''}`).join('')}</div>
+     <p class="hint" style="margin:10px 0 0">Bắt đầu sản xuất trong ngày: <b>${x.startedSX.length}</b> · File in PET chưa xong: <b>${x.khau.pet}</b></p></section>
+   <section class="dcard"><h3>Cảnh báo</h3><div class="hexes">${warn.map(w=>`<div class="hexw ${w.n?w.t:'okk'}"><div class="hexs"><b>${w.n}</b></div><span>${w.n?'':'✓ '}${esc(w.l)}</span></div>`).join('')}</div></section>
+  </div>
+  <div class="dgrid">
+   <section class="dcard"><h3>Theo sale trong ngày</h3>${saleRows.length?`<div class="hbars">${saleRows.map(([k,v])=>`<div class="hb"><span class="hbn">${esc(k)}</span><div class="hbt"><div class="hbf" style="width:${(v.nv/smax*100).toFixed(1)}%;background:var(--v1)" data-tip="Đơn mới: ${v.n} · ${vnd(v.nv)}"></div><div class="hbf" style="width:${(v.cv/smax*100).toFixed(1)}%;background:var(--v3)" data-tip="Chốt đơn: ${v.c} · ${vnd(v.cv)}"></div></div><span class="hbv">${v.n} mới · ${v.c} chốt</span></div>`).join('')}</div><ul class="legend inline"><li><i style="background:var(--v1)"></i>Đơn mới (giá trị)</li><li><i style="background:var(--v3)"></i>Chốt đơn (giá trị)</li></ul>`:'<p class="hint">Không có đơn mới / chốt đơn.</p>'}</section>
+   <section class="dcard"><h3>Việc trễ theo người</h3>${whoRows.length?`<div class="dots">${whoRows.map(([k,v])=>`<div class="dotrow"><span class="hbn">${esc(k)}</span><div class="dotset">${Array.from({length:Math.min(v,12)},()=>'<i></i>').join('')}${v>12?'<em>+'+(v-12)+'</em>':''}</div><b>${v}</b></div>`).join('')}</div><p class="hint">Mỗi chấm = 1 việc trễ. Chi tiết ở “Việc của tôi”.</p>`:'<div class="okbig">✓ Không có việc trễ</div>'}</section>
+  </div>
+  ${x.lateDel.length||x.soon.length?`<section class="dcard"><h3>Đơn cần chú ý giao hàng</h3><ul class="dlist">${x.lateDel.map(oline).join('')}${x.soon.map(oline).join('')}</ul></section>`:''}
+  <section class="dcard"><h3>Đơn mới & chốt đơn trong ngày</h3>${x.newO.length||x.closed.length?`<ul class="dlist">${[...new Set(x.newO.concat(x.closed))].map(oline).join('')}</ul>`:'<p class="hint">Không có.</p>'}</section>
+  <section class="dcard"><h3>Nhật ký hoạt động <small>${x.log.length} thao tác</small></h3>${x.log.length?`<ul class="tl">${x.log.slice(0,60).map(({o,h})=>`<li><time>${dt(h.at).slice(6)}</time><span><span class="code">${esc(o.code)}</span> ${esc(h.text)} · <b>${esc(nameOf(h.by))}</b></span></li>`).join('')}</ul>`:'<p class="hint">Chưa có thao tác nào.</p>'}</section>
+  <div class="tip" id="dtip" hidden></div></div>`;
   bindDate('dashD',iso=>{if(iso&&iso!==dashDay){dashDay=iso;clearTimeout(renderDash._t);renderDash._t=setTimeout(renderDash,900)}});$('#dashT').onclick=()=>{dashDay=todayKey();renderDash()};
   $('#dashCp').onclick=()=>{const t=dashText(dashDay,x);navigator.clipboard.writeText(t).then(()=>toast('Đã copy báo cáo')).catch(()=>copyText(t))};
-  bindCards(app)}
+  const tip=$('#dtip'),root=app.querySelector('.dz');
+  root.addEventListener('pointermove',e=>{const el=e.target.closest('[data-tip]');if(!el){tip.hidden=true;return}tip.textContent=el.getAttribute('data-tip');tip.hidden=false;const r=root.getBoundingClientRect();let lx=e.clientX-r.left+12,ly=e.clientY-r.top+12;if(lx+tip.offsetWidth>r.width)lx=r.width-tip.offsetWidth-4;tip.style.left=lx+'px';tip.style.top=ly+'px'});
+  root.addEventListener('pointerleave',()=>tip.hidden=true);
+}
+
 function openDepositClaim(o){const c=o.depositClaim||{};const tmp={imgs:clone(c.imgs||[])};
   showModal(`<h2>Gửi bill cọc cho kế toán · ${esc(o.code)}</h2>
   <p class="hint">Khách gửi bill chuyển khoản / UNC qua Zalo → bấm chuột phải “Sao chép ảnh” → dán vào ô bên dưới (Ctrl+V).</p>
