@@ -109,6 +109,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .addimg{width:92px;height:92px;border:1.5px dashed var(--line);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:12px;cursor:pointer;position:relative;text-align:center;background:var(--surface)}
 .addimg b{font-size:22px;line-height:1;color:var(--accent)}
 .addimg input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.pastebox{flex:1 1 180px;min-width:0;height:92px!important;min-height:92px!important;border:1.5px dashed var(--line)!important;border-radius:8px;background:var(--surface)!important;resize:none;font-size:12.5px;text-align:center;padding:24px 10px!important;cursor:text;caret-color:transparent;color:var(--muted)}
+.pastebox:focus{border-color:var(--accent)!important;background:var(--accent-soft)!important;outline:none}
+.pastebox::placeholder{color:var(--muted)}
+.thumbs[data-zone]{padding:6px;border-radius:10px;border:1.5px solid transparent}
+.thumbs[data-zone].active{border-color:var(--accent-soft)}
+.thumbs.drop{border-color:var(--accent)!important;background:var(--accent-soft)}
+fieldset:disabled .pastebox,
 fieldset:disabled .addimg,fieldset:disabled .x,fieldset:disabled .rowdel,fieldset:disabled .only-edit{display:none}
 .totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
 .tot{background:var(--surface-2);border-radius:8px;padding:10px 12px;min-width:0}
@@ -201,7 +208,7 @@ function daysTo(s){if(!s)return null;const t=new Date();t.setHours(0,0,0,0);retu
 function toast(m,ms=3200){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,ms)}
 function banner(m){const b=$('#banner');b.hidden=!m;b.textContent=m||''}
 function showModal(html){$('#sheet').innerHTML=html;$('#modal').hidden=false;const f=$('#sheet').querySelector('textarea,input,select');if(f)f.focus()}
-function closeModal(){$('#modal').hidden=true;$('#sheet').innerHTML=''}
+function closeModal(){$('#modal').hidden=true;$('#sheet').innerHTML='';sheetPaste=null}
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden)closeModal()});
 function tone(st){const t=TONE[st]||'idle';return `--st:var(--${t});--st-soft:var(--${t}-soft)`}
@@ -358,7 +365,9 @@ function renderForm(){
     <div class="grid" style="margin-top:12px">
       <div class="f"><span class="hint" style="font-weight:600">Logo khách (file gốc / ảnh)</span><div class="thumbs" id="z_logoImages"></div></div>
       <div class="f"><span class="hint" style="font-weight:600">Ảnh mẫu tham khảo</span><div class="thumbs" id="z_refImages"></div></div>
+      <label class="f full"><span>Link file gốc .AI / .CDR / .PSD (Google Drive, Zalo…)</span><input id="oLogoLink" value="${esc(o.logoLink||'')}" placeholder="App không lưu được file AI/CDR — dán link file gốc vào đây"></label>
     </div>
+    <p class="hint only-edit" style="margin:8px 0 0">Mẹo: ở Zalo/Messenger bấm chuột phải vào ảnh → <b>Sao chép ảnh</b>, rồi bấm vào ô “Dán ảnh” của mục cần thêm và nhấn <b>Ctrl+V</b>. Ô đang chọn có viền xanh; nhấn Ctrl+V ở chỗ khác trên form thì ảnh vào ô đó (mặc định: Logo khách).</p>
   </section>
 
   <section class="sec"><h2>Danh sách in tên / số <small>không bắt buộc — dùng cho đội nhóm, áo in tên</small></h2>
@@ -439,7 +448,7 @@ function bindFormInputs(){
   const map={cName:['customer','name'],cContact:['customer','contact'],cPhone:['customer','phone'],cAddr:['customer','address'],cTax:['customer','taxId']};
   Object.entries(map).forEach(([id,[a,k]])=>{$('#'+id).oninput=e=>cur[a][k]=e.target.value});
   $('#oChannel').onchange=e=>cur.channel=e.target.value;$('#oSales').onchange=e=>cur.salesId=e.target.value;$('#oShip').onchange=e=>cur.shipMethod=e.target.value;
-  $('#oNote').oninput=e=>cur.note=e.target.value;$('#oProdNote').oninput=e=>cur.prodNote=e.target.value;
+  $('#oNote').oninput=e=>cur.note=e.target.value;$('#oLogoLink').oninput=e=>cur.logoLink=e.target.value.trim();$('#oProdNote').oninput=e=>cur.prodNote=e.target.value;
   $('#oDate').oninput=e=>{e.target.value=maskDMY(e.target.value);cur.deliveryDate=parseDMY(e.target.value)};
   [['oDisc','discount'],['oVat','vat'],['oShipFee','shipFee'],['oDeposit','deposit']].forEach(([id,k])=>$('#'+id).oninput=e=>{cur[k]=num(e.target.value);renderTotals()});
   $('#addItem').onclick=()=>{cur.items.push(blankItem());renderItems();renderNames()};
@@ -450,20 +459,39 @@ function bindFormInputs(){
 
 /* ================= ảnh / file ================= */
 const ZONE_LABEL={logoImages:'Thêm logo',refImages:'Thêm ảnh mẫu',listFiles:'Ảnh danh sách'};
+const ZONE_NAME={logoImages:'Logo khách',refImages:'Ảnh mẫu tham khảo',listFiles:'Ảnh danh sách'};
+let activeZone='logoImages';
+const PASTE_PH='Bấm vào đây rồi dán ảnh (Ctrl+V)\nhoặc kéo thả ảnh vào';
+function pasteBoxHTML(key){return `<textarea class="pastebox" data-zone="${key}" placeholder="${PASTE_PH}" aria-label="Dán ảnh vào ${esc(ZONE_NAME[key]||'ô này')}"></textarea>`}
+function bindPasteBox(box,onFiles){const pb=box.querySelector('.pastebox');if(!pb)return;
+  pb.oninput=()=>{pb.value=''};
+  pb.onpaste=async e=>{const fs=clipImages(e);e.preventDefault();pb.value='';if(!fs.length){toast('Không thấy ảnh trong bộ nhớ tạm. Hãy bấm “Sao chép ảnh” ở Zalo/Messenger rồi dán lại.',5000);return}e.stopPropagation();await onFiles(fs)};
+  box.ondragover=e=>{e.preventDefault();box.classList.add('drop')};box.ondragleave=()=>box.classList.remove('drop');
+  box.ondrop=async e=>{e.preventDefault();box.classList.remove('drop');const fs=[...(e.dataTransfer?.files||[])];if(fs.length)await onFiles(fs)}}
+function clipImages(e){const it=[...(e.clipboardData&&e.clipboardData.items||[])];return it.filter(i=>i.kind==='file'&&/^image\//.test(i.type)).map(i=>i.getAsFile()).filter(Boolean).map((f,i)=>f.name&&f.name!=='image.png'?f:new File([f],'dan-anh-'+Date.now()+'-'+i+'.'+((f.type.split('/')[1]||'png').replace('jpeg','jpg')),{type:f.type}))}
 function renderZone(key,boxSel){const box=boxSel?$(boxSel):$('#z_'+key);if(!box)return;const arr=cur[key];const ed=editing();
+  box.dataset.zone=key;box.classList.toggle('active',ed&&activeZone===key);
   box.innerHTML=arr.map((a,i)=>`<div class="thumb">${isImg(a)?`<img src="${esc(imgSrc(a))}" alt="${esc(a.name||'ảnh')}" data-zoom>`:`<a class="fn" href="${esc(imgSrc(a))}" target="_blank" rel="noopener">${esc(a.name||'file')}</a>`}${ed?`<button type="button" class="x" data-i="${i}" aria-label="Xóa ảnh">×</button>`:''}</div>`).join('')+
-   (ed?`<label class="addimg"><b>+</b>${ZONE_LABEL[key]}<input type="file" multiple accept="image/*,.pdf"></label>`:(arr.length?'':'<span class="hint">Chưa có</span>'));
+   (ed?`<label class="addimg"><b>+</b>${key==='logoImages'?'Tải file gốc':ZONE_LABEL[key]}<input type="file" multiple accept="image/*,.pdf,.svg"></label>${pasteBoxHTML(key)}`:(arr.length?'':'<span class="hint">Chưa có</span>'));
   box.querySelectorAll('img[data-zoom]').forEach(im=>im.onclick=()=>zoom(im.src));
   if(!ed)return;
+  box.onpointerdown=()=>{if(activeZone!==key){activeZone=key;$$('.thumbs[data-zone]').forEach(z=>z.classList.toggle('active',z.dataset.zone===key))}};
   box.querySelectorAll('.x').forEach(b=>b.onclick=()=>{arr.splice(+b.dataset.i,1);renderZone(key,boxSel)});
   const fi=box.querySelector('input[type=file]');if(fi)fi.onchange=async()=>{await uploadInto(arr,[...fi.files]);renderZone(key,boxSel)};
+  bindPasteBox(box,async fs=>{activeZone=key;await uploadInto(arr,fs);renderZone(key,boxSel);toast(`Đã dán ${fs.length} ảnh vào “${ZONE_NAME[key]}”`)});
 }
 async function uploadInto(arr,files){if(!assets){toast('Bạn chưa có quyền tải file lên. Nhờ anh Phát cấp quyền.');return}
   for(const f of files){toast('Đang tải '+f.name+'…',60000);try{const blob=isImg({type:f.type})?await shrink(f):f;const r=await assets.upload(blob);arr.push({id:r.id,url:r.url,name:f.name,type:blob.type||f.type})}catch(e){toast('Tải lên chưa được: '+(e.message||e.code),5000);return}}
   toast('Đã tải lên '+files.length+' file')}
 async function shrink(f,max=2000){if(!/^image\/(jpeg|png|webp)$/.test(f.type)||f.size<700000)return f;try{const bm=await createImageBitmap(f);const s=Math.min(1,max/Math.max(bm.width,bm.height));const c=document.createElement('canvas');c.width=Math.round(bm.width*s);c.height=Math.round(bm.height*s);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(b=>r(b||f),'image/jpeg',.86))}catch(e){return f}}
 function zoom(src){showModal(`<img src="${esc(src)}" alt="Ảnh phóng to" style="max-width:100%;border-radius:8px"><div class="acts"><button class="btn" id="zX">Đóng</button></div>`);$('#zX').onclick=closeModal}
-document.addEventListener('paste',async e=>{if(view!=='form'||!editing())return;const fs=[...(e.clipboardData?.files||[])].filter(f=>/^image\//.test(f.type));if(!fs.length)return;e.preventDefault();await uploadInto(cur.listFiles,fs);renderZone('listFiles');toast('Đã dán ảnh vào “Ảnh danh sách”')});
+/* Ctrl+V ở bất kỳ đâu trên form: ảnh vào ô đang chọn (viền xanh), mặc định là Logo khách */
+let sheetPaste=null;
+document.addEventListener('paste',async e=>{
+  const fs=clipImages(e);if(!fs.length)return;
+  if(!$('#modal').hidden){if(sheetPaste){e.preventDefault();await sheetPaste(fs)}return}
+  if(view!=='form'||!editing())return;
+  e.preventDefault();const key=activeZone;await uploadInto(cur[key],fs);renderZone(key);toast(`Đã dán ${fs.length} ảnh vào “${ZONE_NAME[key]}”`)});
 
 /* ================= AI đọc danh sách ================= */
 let aiBusy=false;
@@ -563,7 +591,8 @@ function openUpload(o){const d=o.design;const v=(d.versions||[]).length+1;const 
   showModal(`<h2>Nộp mẫu V${v} · ${esc(o.code)}</h2><p class="hint">${esc(d.request||'')}</p><div class="thumbs" id="upZone"></div>
   <label class="f"><span>Ghi chú cho sale</span><input id="upNote" placeholder="VD: 2 phương án màu"></label>
   <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Gửi sale duyệt</button></div>`);
-  const draw=()=>{const z=$('#upZone');z.innerHTML=tmp.imgs.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="mẫu"></div>`).join('')+`<label class="addimg"><b>+</b>Thêm ảnh mẫu<input type="file" multiple accept="image/*"></label>`;z.querySelector('input').onchange=async e=>{await uploadInto(tmp.imgs,[...e.target.files]);draw()}};draw();
+  const addF=async fs=>{await uploadInto(tmp.imgs,fs);draw();toast(`Đã thêm ${fs.length} ảnh mẫu`)};
+  const draw=()=>{const z=$('#upZone');if(!z)return;z.innerHTML=tmp.imgs.map(a=>`<div class="thumb"><img src="${esc(imgSrc(a))}" alt="mẫu"></div>`).join('')+`<label class="addimg"><b>+</b>Thêm ảnh mẫu<input type="file" multiple accept="image/*"></label><textarea class="pastebox" placeholder="${PASTE_PH}" aria-label="Dán ảnh mẫu"></textarea>`;z.querySelector('input[type=file]').onchange=async e=>{await addF([...e.target.files])};bindPasteBox(z,addF)};draw();sheetPaste=addF;
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{if(!tmp.imgs.length){toast('Thêm ít nhất 1 ảnh mẫu.');return}
     const nd=Object.assign({},d,{state:'review',versions:(d.versions||[]).concat([{v,images:tmp.imgs,at:nowISO(),by:me||'',note:$('#upNote').value.trim()}])});
     act(()=>patch(o,{design:nd},`Nộp mẫu V${v}`),'Đã gửi mẫu cho sale')}}
@@ -696,7 +725,7 @@ async function exportPdf(o){if(!downloads){toast('Chế độ xem này không ch
         H('2. In / thêu'),
         o.deco.length?{table:{headerRows:1,widths:[100,90,'*'],body:[['Kỹ thuật','Vị trí','Nội dung / kích thước / màu'].map(t=>cell(t,{bold:true,fillColor:LAB}))].concat(o.deco.map(x=>[cell(x.method),cell(x.position),cell(x.detail)]))},layout:lay}:{text:'Không in/thêu',italics:true},
         ...(mock.length?[H('3. Mẫu thiết kế đã chốt'),{columns:mock.map(u=>({image:u,fit:[mock.length>1?250:520,mock.length>1?250:340]})),columnGap:10}]:[]),
-        ...(logos.length?[H('Logo khách'),{columns:logos.map(u=>({image:u,fit:[120,90]})),columnGap:10}]:[]),
+        ...(logos.length||o.logoLink?[H('Logo khách'),...(logos.length?[{columns:logos.map(u=>({image:u,fit:[120,90]})),columnGap:10}]:[]),...(o.logoLink?[{text:'File gốc: '+o.logoLink,fontSize:9,color:'#1f62a8',margin:[0,4,0,0]}]:[])]:[]),
         ...(names.length?[H(`${mock.length?'4':'3'}. Danh sách in tên / số (${names.length} người)`),{table:{headerRows:1,widths:[24,'*',40,44,40,'*'],body:[['#','Tên in','Số','Size','Mẫu','Ghi chú'].map(t=>cell(t,{bold:true,fillColor:LAB}))].concat(names.map((r,i)=>[cell(i+1),cell(r.name,{bold:true}),cell(r.number,{alignment:'center'}),cell(r.size,{alignment:'center'}),cell('M'+(Math.max(0,o.items.findIndex(x=>x.id===r.item))+1)),cell(r.note)]))},layout:lay}]:[]),
         H('Ghi chú cho xưởng'),{text:o.prodNote||'—',fontSize:10},
         {margin:[0,24,0,0],columns:['Sale','Thiết kế','Sản xuất','Kiểm hàng (QC)'].map(t=>({stack:[{text:t,bold:true,alignment:'center'},{text:'(ký, ghi rõ họ tên)',fontSize:8,color:'#777',alignment:'center',margin:[0,0,0,40]}]}))}
