@@ -380,7 +380,7 @@ function renderForm(){
   ${o.code&&!ed?designSecHTML(o)+histSecHTML(o):''}`;
   $('#backBtn').onclick=()=>go('list');
   renderItems();renderDeco();renderNames();renderTotals();
-  ['logoImages','refImages','listFiles'].forEach(renderZone);
+  ['logoImages','refImages','listFiles'].forEach(k=>renderZone(k));
   if(ed)bindFormInputs();
   if(o.code&&!ed)bindViewExtras();
   renderBar();
@@ -586,7 +586,7 @@ function openToProd(o){const warns=[];if(o.design&&o.design.state!=='approved')w
 async function stageDone(o){const P=clone(o.prod);P.stageAt=P.stageAt||{};P.stageAt[P.stage]={at:nowISO(),by:me||''};const name=STAGES[P.stage];P.stage++;
   const upd={prod:P};if(P.stage>=STAGES.length){upd.status='Sẵn sàng giao';P.doneAt=nowISO()}
   await act(()=>patch(o,upd,'Xong: '+name+(upd.status?' → Sẵn sàng giao':'')),'Đã cập nhật')}
-function renderProd(){const L=orders.filter(o=>o.status==='Đang sản xuất'&&o.prod).sort((a,b)=>((a.prod.due||a.deliveryDate||'9')<(b.prod.due||b.deliveryDate||'9'))?-1:1);
+function renderProd(){const L=orders.filter(o=>o.status==='Đang sản xuất'&&o.prod).map(o=>{if(o.prod.stage>=STAGES.length){o=clone(o);o.prod.stage=STAGES.length-1}return o}).sort((a,b)=>((a.prod.due||a.deliveryDate||'9')<(b.prod.due||b.deliveryDate||'9'))?-1:1);
   const wait=orders.filter(o=>isActive(o)&&!o.prod&&o.status==='Đã duyệt mẫu');
   app.innerHTML=`<h2 style="font-size:20px;margin-bottom:10px">Đang sản xuất (${L.length})</h2><div class="list">${L.length?L.map(o=>{const P=o.prod;const late=P.due&&daysTo(P.due)<0;
     return `<div class="qcard">${cardHTML(o,`<div class="stepper">${STAGES.map((n,i)=>`<span class="step ${i<P.stage?'done':i===P.stage?'now':''}">${n}</span>`).join('')}</div><div class="hint">${P.mode==='outsource'?'Gia công: '+esc(P.factory||'—'):'Xưởng AKOPA'}${P.due?` · hẹn xong <span class="${late?'due-bad':''}">${dmy(P.due)}</span>`:''}</div>`)}
