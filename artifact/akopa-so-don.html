@@ -224,6 +224,24 @@ const PRODUCTS=['Áo thun cổ tròn','Áo thun cổ tim','Áo polo','Áo polo t
 const FABRICS=['Cotton 100%','Cotton 65/35 (TC)','CVC','Cá sấu Cotton','Cá sấu Poly (PE)','Cá sấu CVC','Mè Thái','Thun lạnh','Poly thể thao','Khác'];
 const METHODS=['In lụa','In chuyển nhiệt','In DTF','In PET','Thêu vi tính','Ép decal','Không in'];
 const POSITIONS=['Ngực trái','Ngực phải','Giữa ngực','Sau lưng','Tay trái','Tay phải','Sau cổ','Khác'];
+/* Danh mục mở rộng: chọn “Khác – tự nhập mới” sẽ lưu thêm lựa chọn cho các đơn sau */
+const OPT_BASE={product:PRODUCTS.filter(x=>x!=='Khác'),fabric:FABRICS.filter(x=>x!=='Khác'),method:METHODS.slice(),position:POSITIONS.filter(x=>x!=='Khác')};
+const OPT_NAME={product:'loại áo',fabric:'chất liệu vải',method:'kỹ thuật in / thêu',position:'vị trí in'};
+let customOpts={product:[],fabric:[],method:[],position:[]};
+const lc=x=>String(x||'').trim().toLocaleLowerCase('vi');
+function optList(type,cur){const L=OPT_BASE[type].slice();customOpts[type].forEach(x=>{if(!L.some(y=>lc(y)===lc(x)))L.push(x)});if(cur&&cur!=='Khác'&&!L.some(y=>y===cur))L.push(cur);return L}
+function optsX(type,val){return optList(type,val).map(x=>`<option${x===val?' selected':''}>${esc(x)}</option>`).join('')+(val==='Khác'?'<option selected>Khác</option>':'')+`<option value="__new">➕ Khác – tự nhập mới…</option>`}
+function slugOpt(t){return String(t).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80)||'x'}
+function askNewOpt(type,done){
+  showModal(`<h2>Thêm ${OPT_NAME[type]} mới</h2><p class="hint">Lựa chọn mới sẽ được lưu vào danh sách, cả công ty dùng được cho các đơn sau.</p>
+   <label class="f"><span>Tên ${OPT_NAME[type]}</span><input id="noVal" placeholder="${type==='product'?'VD: Áo sơ mi tay ngắn':type==='fabric'?'VD: Cotton 2 chiều 250gsm':type==='method'?'VD: In nhũ':'VD: Lai áo sau'}" maxlength="60" list="noList"></label>
+   <datalist id="noList">${optList(type).map(x=>`<option value="${esc(x)}">`).join('')}</datalist>
+   <div class="acts"><button class="btn" id="mX">Hủy</button><button class="btn primary" id="mOk">Thêm &amp; chọn</button></div>`);
+  $('#mX').onclick=closeModal;const inp=$('#noVal');inp.onkeydown=e=>{if(e.key==='Enter')$('#mOk').click()};
+  $('#mOk').onclick=async()=>{const v=inp.value.trim().replace(/\s+/g,' ');if(!v){toast('Nhập tên trước.');return}
+    const ex=optList(type).find(y=>lc(y)===lc(v));const label=ex||v;
+    if(!ex){customOpts[type].push(label);try{await db.doc('options/'+type+'~'+slugOpt(label)).set({type,label,by:me||'',at:nowISO()})}catch(e){toast('Đã chọn cho đơn này, nhưng chưa lưu được vào danh sách chung: '+(e.message||e.code),5000)}}
+    closeModal();done(label);if(!ex)toast(`Đã thêm “${label}” vào danh sách ${OPT_NAME[type]}`)}}
 const SIZES=['XS','S','M','L','XL','2XL','3XL','4XL'];
 const CHANNELS=['Facebook','Zalo','Website','TikTok','Google','Khách quen','Giới thiệu','Khác'];
 const SHIPS=['Khách đến lấy','AKOPA tự giao','Gửi nhà xe','Viettel Post','GHTK','GHN','J&T','Grab / Ahamove','Khác'];
@@ -357,6 +375,7 @@ async function boot(){
     if(view==='form'&&mode==='view'&&cur){const o=orders.find(x=>x.code===cur.code);if(o){cur=clone(o);}}
     rerender();
   },e=>banner('Không tải được danh sách đơn ('+(e.code||'lỗi')+'). Tải lại trang để thử lại.'));
+  db.collection('options').limit(1000).onSnapshot(s=>{const n={product:[],fabric:[],method:[],position:[]};s.docs.forEach(d=>{const x=d.data()||{};if(n[x.type]&&x.label&&!x.hidden)n[x.type].push(String(x.label))});Object.values(n).forEach(a=>a.sort((x,y)=>x.localeCompare(y,'vi')));customOpts=n},()=>{});
   db.collection('config').limit(20).onSnapshot(s=>{const d=s.docs.find(x=>x.id==='perms');permCfg=d?d.data()||{}:{};rerender()},()=>{});
   db.collection('roles').limit(200).onSnapshot(s=>{roles={};s.docs.forEach(d=>roles[d.id]=d.data());rolesLoaded=true;
     if(!rerender._homed&&myTeam()&&view==='list'){rerender._homed=true;view=TEAM_HOME[myTeam()]||'list'}rerender()},()=>{rolesLoaded=true;rerender()});
@@ -526,8 +545,8 @@ function progressHTML(o){const P=o.prod;let s='';
 function renderItems(){const box=$('#items');const ed=editing();
   box.innerHTML=cur.items.map((it,ix)=>`<div class="item" data-i="${ix}"><div class="item-h"><span>Mẫu ${ix+1} · ${fmt(itemQty(it))} áo</span>${cur.items.length>1?`<button type="button" class="rowdel" data-delitem="${ix}" aria-label="Xóa mẫu">×</button>`:''}</div>
    <div class="grid three">
-    <label class="f"><span>Loại áo</span><select data-k="product">${opts(PRODUCTS,it.product)}</select></label>
-    <label class="f"><span>Chất liệu vải</span><select data-k="fabric">${opts(FABRICS,it.fabric)}</select></label>
+    <label class="f"><span>Loại áo</span><select data-k="product">${optsX('product',it.product)}</select></label>
+    <label class="f"><span>Chất liệu vải</span><select data-k="fabric">${optsX('fabric',it.fabric)}</select></label>
     <label class="f"><span>Màu áo / phối màu</span><input data-k="color" value="${esc(it.color)}" placeholder="VD: Xanh navy, bo cổ trắng"></label>
     ${perm(cur).money?`<label class="f"><span>Đơn giá (đ/áo)</span><input type="number" data-k="price" min="0" value="${num(it.price)||''}"></label>`:''}
     <label class="f"><span>SL size khác</span><input type="number" data-k="extraQty" min="0" value="${num(it.extraQty)||''}"></label>
@@ -536,15 +555,15 @@ function renderItems(){const box=$('#items');const ed=editing();
    <div class="sizes">${SIZES.map(z=>`<label>${z}<input type="number" min="0" data-size="${z}" value="${num(it.sizes[z])||''}" aria-label="Size ${z}"></label>`).join('')}</div></div>`).join('');
   if(!ed)return;
   box.querySelectorAll('.item').forEach(el=>{const it=cur.items[+el.dataset.i];
-    el.querySelectorAll('[data-k]').forEach(inp=>inp.oninput=inp.onchange=()=>{const k=inp.dataset.k;it[k]=['price','extraQty'].includes(k)?num(inp.value):inp.value;updItemHead(el,it);renderTotals()});
+    el.querySelectorAll('[data-k]').forEach(inp=>inp.oninput=inp.onchange=()=>{const k=inp.dataset.k;if(inp.value==='__new'){inp.value=it[k]||'';askNewOpt(k,v=>{it[k]=v;renderItems()});return}it[k]=['price','extraQty'].includes(k)?num(inp.value):inp.value;updItemHead(el,it);renderTotals()});
     el.querySelectorAll('[data-size]').forEach(inp=>inp.oninput=()=>{it.sizes[inp.dataset.size]=num(inp.value);updItemHead(el,it);renderTotals()})});
   box.querySelectorAll('[data-delitem]').forEach(b=>b.onclick=()=>{cur.items.splice(+b.dataset.delitem,1);renderItems();renderTotals();renderNames()});
 }
 function updItemHead(el,it){el.querySelector('.item-h span').textContent=`Mẫu ${+el.dataset.i+1} · ${fmt(itemQty(it))} áo`}
 function renderDeco(){const tb=$('#deco');
-  tb.innerHTML=cur.deco.length?cur.deco.map((d,i)=>`<tr data-i="${i}"><td style="min-width:140px"><select data-k="method">${opts(METHODS,d.method)}</select></td><td style="min-width:120px"><select data-k="position">${opts(POSITIONS,d.position)}</select></td><td style="min-width:220px"><input data-k="detail" value="${esc(d.detail)}" placeholder="VD: logo 8cm, 2 màu trắng–vàng"></td><td><button type="button" class="rowdel" data-del="${i}" aria-label="Xóa">×</button></td></tr>`).join(''):'<tr><td colspan="4" class="hint">Chưa có vị trí in/thêu.</td></tr>';
+  tb.innerHTML=cur.deco.length?cur.deco.map((d,i)=>`<tr data-i="${i}"><td style="min-width:140px"><select data-k="method">${optsX('method',d.method)}</select></td><td style="min-width:120px"><select data-k="position">${optsX('position',d.position)}</select></td><td style="min-width:220px"><input data-k="detail" value="${esc(d.detail)}" placeholder="VD: logo 8cm, 2 màu trắng–vàng"></td><td><button type="button" class="rowdel" data-del="${i}" aria-label="Xóa">×</button></td></tr>`).join(''):'<tr><td colspan="4" class="hint">Chưa có vị trí in/thêu.</td></tr>';
   if(!editing())return;
-  tb.querySelectorAll('tr[data-i]').forEach(tr=>{const d=cur.deco[+tr.dataset.i];tr.querySelectorAll('[data-k]').forEach(inp=>inp.oninput=inp.onchange=()=>d[inp.dataset.k]=inp.value)});
+  tb.querySelectorAll('tr[data-i]').forEach(tr=>{const d=cur.deco[+tr.dataset.i];tr.querySelectorAll('[data-k]').forEach(inp=>inp.oninput=inp.onchange=()=>{const k=inp.dataset.k;if(inp.value==='__new'){inp.value=d[k]||'';askNewOpt(k,v=>{d[k]=v;renderDeco()});return}d[k]=inp.value})});
   tb.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{cur.deco.splice(+b.dataset.del,1);renderDeco()});
 }
 function renderNames(){const tb=$('#names');const ed=editing();const it=cur.items;
