@@ -158,6 +158,7 @@ fieldset:disabled .addimg,fieldset:disabled .x,fieldset:disabled .rowdel,fieldse
   </header>
   <nav class="tabs" id="tabs" aria-label="Các mục" hidden></nav>
   <div id="banner" class="banner" hidden></div>
+  <div id="noteBox" class="banner" style="background:var(--info-soft);color:var(--fg)" hidden></div>
   <main id="app">
     <div class="empty"><h3>Đang mở sổ đơn…</h3><p>Danh sách đơn hàng của AKOPA sẽ hiện ở đây. Bấm “+ Đơn mới” để tạo đơn đầu tiên.</p></div>
   </main>
@@ -240,23 +241,30 @@ async function boot(){
   const c=window.claude;
   if(!c||typeof c.use!=='function'){app.innerHTML='<div class="empty"><h3>Chưa kết nối được</h3><p>Hãy mở trang này trong Claude để lưu và xem đơn hàng.</p></div>';return}
   [db,assets,sample,downloads,user]=await Promise.all(['db','assets','sample','downloads','user'].map(n=>c.use(n).catch(()=>null)));
-  if(user){try{me=await user.id()}catch(e){}user.isOwner().then(a=>{if(a){isOwner=canManage=true;rerender()}}).catch(()=>{});user.canEdit().then(a=>{if(a){canManage=true;rerender()}}).catch(()=>{})}
+  if(user){try{me=await user.id()}catch(e){}if(!me){try{const v=await user.me();me=v&&v.id||null}catch(e){}}user.isOwner().then(a=>{if(a){isOwner=canManage=true;rerender()}}).catch(()=>{});user.canEdit().then(a=>{if(a){canManage=true;rerender()}}).catch(()=>{})}
   if(!db){app.innerHTML='<div class="empty"><h3>Chưa mở được sổ đơn</h3><p>Hãy đăng nhập Claude và nhờ anh Phát chia sẻ trang này với quyền Contributor trở lên.</p></div>';return}
   db.collection('orders').orderBy('createdAt','desc').limit(800).onSnapshot(s=>{
     orders=s.docs.map(d=>normalize(Object.assign({},d.data(),{code:d.id})));loaded=true;banner('');
     if(view==='form'&&mode==='view'&&cur){const o=orders.find(x=>x.code===cur.code);if(o){cur=clone(o);}}
     rerender();
   },e=>banner('Không tải được danh sách đơn ('+(e.code||'lỗi')+'). Tải lại trang để thử lại.'));
-  db.collection('members').limit(200).onSnapshot(s=>{members={};s.docs.forEach(d=>members[d.id]=d.data());resolveNames(Object.keys(members));
+  db.collection('members').limit(200).onSnapshot(s=>{members={};s.docs.forEach(d=>members[d.id]=d.data());membersLoaded=true;resolveNames(Object.keys(members));
     if(view==='list'&&!rerender._homed&&myTeam()){rerender._homed=true;view=TEAM_HOME[myTeam()]||'list'}
-    rerender();maybeOnboard()},()=>{});
+    rerender();maybeOnboard()},()=>{membersLoaded=true;rerender();maybeOnboard()});
+  /* dự phòng: nếu danh sách nhân sự chậm hoặc lỗi, vẫn hỏi bộ phận sau 3 giây */
+  setTimeout(()=>{membersLoaded=true;renderWho();maybeOnboard()},3000);
   renderWho();rerender();
 }
+let membersLoaded=false;
 async function resolveNames(ids){if(!user||!ids.length)return;try{const ps=await user.profiles(ids);Object.keys(ps).forEach(k=>{if(ps[k].name)names[k]=ps[k].name});renderWho()}catch(e){}}
-function renderWho(){const w=$('#who');if(!me){w.innerHTML='';return}const t=myTeam();
-  w.innerHTML=`<span>${esc(nameOf(me))}${t?' · '+esc(TEAMS[t]):''}</span><button class="btn sm" id="meBtn">Hồ sơ</button>`;$('#meBtn').onclick=openProfile}
+function renderWho(){const w=$('#who');const nb=$('#noteBox');
+  if(!db){w.innerHTML='';nb.hidden=true;return}
+  if(!me){w.innerHTML='';nb.hidden=false;nb.innerHTML='<b>Chưa nhận ra tài khoản của bạn.</b> Hãy đăng nhập Claude bằng đúng email được anh Phát mời, rồi tải lại trang. Nếu vẫn thấy dòng này, nhờ anh Phát vào Share mời lại email của bạn (quyền Contributor).';return}
+  const t=myTeam();const reg=!!members[me];
+  w.innerHTML=`<span>${esc(nameOf(me))}${t?' · '+esc(TEAMS[t]):''}</span><button class="btn sm${reg?'':' primary'}" id="meBtn">${reg?'Hồ sơ':'Chọn bộ phận'}</button>`;$('#meBtn').onclick=openProfile;
+  if(!reg&&membersLoaded){nb.hidden=false;nb.innerHTML='<b>Bạn chưa chọn bộ phận.</b> Bấm nút bên dưới để nhập tên gọi và bộ phận, app sẽ mở đúng việc của bạn. <div style="margin-top:8px"><button class="btn sm primary" id="nbBtn">Chọn bộ phận ngay</button></div>';$('#nbBtn').onclick=openProfile}else nb.hidden=true}
 let onboarded=false;
-function maybeOnboard(){if(onboarded||!me||members[me])return;onboarded=true;openProfile()}
+function maybeOnboard(){if(onboarded||!me||!membersLoaded||members[me])return;if(!$('#modal').hidden)return;onboarded=true;openProfile()}
 function openProfile(){const m=members[me]||{};
   showModal(`<h2>Bạn làm ở bộ phận nào?</h2><p class="hint">Chọn bộ phận để app mở đúng việc của bạn. Có thể đổi lại sau.</p>
   <label class="f"><span>Tên gọi trong công ty</span><input id="pNick" value="${esc(m.nick||names[me]||'')}" placeholder="VD: Tuyền Sale"></label>
@@ -264,7 +272,8 @@ function openProfile(){const m=members[me]||{};
   <div class="acts"><button class="btn" id="pX">Để sau</button><button class="btn primary" id="pOk">Lưu</button></div>`);
   $('#pX').onclick=closeModal;
   $('#pOk').onclick=async()=>{const nick=$('#pNick').value.trim(),team=$('#pTeam').value;if(!nick){toast('Nhập tên gọi trước.');return}
-    try{await db.doc('members/'+me).set(Object.assign({},m,{nick,team,since:m.since||new Date().toISOString()}));closeModal();toast('Đã lưu hồ sơ');view=TEAM_HOME[team]||'list';rerender()}catch(e){toast('Chưa lưu được: '+(e.message||e.code))}}
+    try{const data=Object.assign({},m,{nick,team,since:m.since||new Date().toISOString()});await db.doc('members/'+me).set(data);members[me]=data;closeModal();toast('Đã lưu hồ sơ');view=TEAM_HOME[team]||'list';rerender()}
+    catch(e){toast(['permission_denied','invalid_argument','not_granted'].includes(e.code)?'Tài khoản của bạn chỉ có quyền xem. Nhờ anh Phát vào Share đổi bạn sang quyền Contributor.':'Chưa lưu được: '+(e.message||e.code),6000)}}
 }
 
 /* ================= tabs ================= */
