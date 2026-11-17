@@ -48,7 +48,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .btn.danger{color:var(--bad);border-color:var(--bad-soft)}
 .btn.sm{min-height:32px;padding:5px 10px;font-size:13px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.tabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:14px;border-bottom:1px solid var(--line);scrollbar-width:none}
+.tabs{display:flex;flex-wrap:wrap;gap:2px 4px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+@media (max-width:700px){.tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent;padding-bottom:2px}.tabs::-webkit-scrollbar{height:4px}.tabs::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}}
 .tab{border:0;background:none;padding:10px 12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:6px;align-items:center}
 .tab[aria-current="page"]{color:var(--fg);border-bottom-color:var(--accent)}
 .cnt{font-size:11px;min-width:20px;padding:1px 6px;border-radius:999px;background:var(--idle-soft);color:var(--idle);font-weight:700}
@@ -980,7 +981,7 @@ function renderTabs(){const nav=$('#tabs');if(!db){nav.hidden=true;return}nav.hi
   const T=P.tabs.map(k=>[k].concat(ALL[k]));
   const v=view==='form'?'list':view;
   nav.innerHTML=T.map(([k,l,n,hot])=>`<button class="tab${hot?' hot':''}" data-v="${k}"${v===k?' aria-current="page"':''}>${l}${n?`<span class="cnt">${n}</span>`:''}</button>`).join('');
-  nav.querySelectorAll('.tab').forEach(b=>b.onclick=()=>go(b.dataset.v))}
+  nav.querySelectorAll('.tab').forEach(b=>b.onclick=()=>go(b.dataset.v));const cu=nav.querySelector('.tab[aria-current]');if(cu&&nav.scrollWidth>nav.clientWidth){const l=cu.offsetLeft-(nav.clientWidth-cu.offsetWidth)/2;nav.scrollLeft=Math.max(0,l)}}
 function go(v){if(view==='form'&&mode!=='view'&&JSON.stringify(cur)!==JSON.stringify(orig)){confirmLeave(()=>{view=v;mode='view';cur=null;rerender()});return}view=v;mode='view';cur=null;rerender();window.scrollTo(0,0)}
 function confirmLeave(ok){showModal(`<h2>Bỏ thay đổi chưa lưu?</h2><p>Đơn đang sửa chưa được lưu.</p><div class="acts"><button class="btn" id="cNo">Ở lại</button><button class="btn danger" id="cYes">Bỏ thay đổi</button></div>`);$('#cNo').onclick=closeModal;$('#cYes').onclick=()=>{closeModal();ok()}}
 function rerender(){renderTabs();renderWho();$('#bar').hidden=view!=='form';
