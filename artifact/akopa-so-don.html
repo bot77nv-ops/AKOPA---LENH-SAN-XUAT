@@ -237,10 +237,18 @@ function urg(o){if(!isActive(o)||o.status==='Sẵn sàng giao')return'';const d=
 
 /* ================= trạng thái app ================= */
 let db=null,assets=null,sample=null,downloads=null,user=null,me=null,isOwner=false,canManage=false;
-let orders=[],members={},names={},loaded=false;
+let orders=[],members={},roles={},names={},loaded=false,rolesLoaded=false;
 let view='list',mode='view',cur=null,orig=null,filter='work',q='',saving=false,revYear=new Date().getFullYear();
 const app=$('#app');
-const myTeam=()=>me&&members[me]?members[me].team:'';
+const teamOf=id=>id&&roles[id]?roles[id].team||'':'';
+const myTeam=()=>teamOf(me);
+/* Quyền xem theo bộ phận. Chủ app & Editor luôn thấy toàn bộ. */
+function perm(){const t=myTeam();const full=isOwner||canManage||['sale','manager','accounting'].includes(t);
+  return{full,team:t,pending:!full&&!t,
+    money:full,contact:full,edit:full,status:full,deliver:full,approve:full,
+    design:full||t==='design',prod:full||t==='production',
+    tabs:full?['list','design','production','money'].concat(canManage?['revenue']:[]).concat(['team']):t==='design'?['design','list','team']:t==='production'?['production','list','team']:[]}}
+const maskMoney=t=>String(t||'').replace(/\d[\d.,]*\s?đ(?!\p{L})/gu,'***');
 const nameOf=id=>!id?'—':(members[id]&&members[id].nick)||names[id]||'Nhân viên';
 
 /* ================= khởi động ================= */
@@ -255,8 +263,9 @@ async function boot(){
     if(view==='form'&&mode==='view'&&cur){const o=orders.find(x=>x.code===cur.code);if(o){cur=clone(o);}}
     rerender();
   },e=>banner('Không tải được danh sách đơn ('+(e.code||'lỗi')+'). Tải lại trang để thử lại.'));
+  db.collection('roles').limit(200).onSnapshot(s=>{roles={};s.docs.forEach(d=>roles[d.id]=d.data());rolesLoaded=true;
+    if(!rerender._homed&&myTeam()&&view==='list'){rerender._homed=true;view=TEAM_HOME[myTeam()]||'list'}rerender()},()=>{rolesLoaded=true;rerender()});
   db.collection('members').limit(200).onSnapshot(s=>{members={};s.docs.forEach(d=>members[d.id]=d.data());membersLoaded=true;resolveNames(Object.keys(members));
-    if(view==='list'&&!rerender._homed&&myTeam()){rerender._homed=true;view=TEAM_HOME[myTeam()]||'list'}
     rerender();maybeOnboard()},()=>{membersLoaded=true;rerender();maybeOnboard()});
   /* dự phòng: nếu danh sách nhân sự chậm hoặc lỗi, vẫn hỏi bộ phận sau 3 giây */
   setTimeout(()=>{membersLoaded=true;renderWho();maybeOnboard()},3000);
@@ -267,19 +276,23 @@ async function resolveNames(ids){if(!user||!ids.length)return;try{const ps=await
 function renderWho(){const w=$('#who');const nb=$('#noteBox');
   if(!db){w.innerHTML='';nb.hidden=true;return}
   if(!me){w.innerHTML='';nb.hidden=false;nb.innerHTML='<b>Chưa nhận ra tài khoản của bạn.</b> Hãy đăng nhập Claude bằng đúng email được anh Phát mời, rồi tải lại trang. Nếu vẫn thấy dòng này, nhờ anh Phát vào Share mời lại email của bạn (quyền Contributor).';return}
-  const t=myTeam();const reg=!!members[me];
+  const t=myTeam();const reg=!!members[me];const P=perm();
   w.innerHTML=`<span>${esc(nameOf(me))}${t?' · '+esc(TEAMS[t]):''}</span><button class="btn sm${reg?'':' primary'}" id="meBtn">${reg?'Hồ sơ':'Chọn bộ phận'}</button>`;$('#meBtn').onclick=openProfile;
+  if(reg&&P.pending&&rolesLoaded){nb.hidden=false;const rq=members[me].requestedTeam;nb.innerHTML=`<b>Đang chờ quản lý duyệt bộ phận${rq?' “'+esc(TEAMS[rq]||rq)+'”':''}.</b> Khi được duyệt, app sẽ mở đúng phần việc của bạn. Nhắn anh Phát nếu chờ lâu.`;return}
   if(!reg&&membersLoaded){nb.hidden=false;nb.innerHTML='<b>Bạn chưa chọn bộ phận.</b> Bấm nút bên dưới để nhập tên gọi và bộ phận, app sẽ mở đúng việc của bạn. <div style="margin-top:8px"><button class="btn sm primary" id="nbBtn">Chọn bộ phận ngay</button></div>';$('#nbBtn').onclick=openProfile}else nb.hidden=true}
 let onboarded=false;
 function maybeOnboard(){if(onboarded||!me||!membersLoaded||members[me])return;if(!$('#modal').hidden)return;onboarded=true;openProfile()}
 function openProfile(){const m=members[me]||{};
-  showModal(`<h2>Bạn làm ở bộ phận nào?</h2><p class="hint">Chọn bộ phận để app mở đúng việc của bạn. Có thể đổi lại sau.</p>
+  const curT=teamOf(me)||m.requestedTeam||m.team;
+  showModal(`<h2>Bạn làm ở bộ phận nào?</h2><p class="hint">Quản lý sẽ duyệt bộ phận bạn chọn. Sau khi duyệt, app chỉ hiện đúng phần việc của bộ phận đó.</p>
   <label class="f"><span>Tên gọi trong công ty</span><input id="pNick" value="${esc(m.nick||names[me]||'')}" placeholder="VD: Tuyền Sale"></label>
-  <label class="f"><span>Bộ phận</span><select id="pTeam">${Object.entries(TEAMS).map(([k,v])=>`<option value="${k}"${m.team===k?' selected':''}>${v}</option>`).join('')}</select></label>
+  <label class="f"><span>Bộ phận</span><select id="pTeam">${Object.entries(TEAMS).map(([k,v])=>`<option value="${k}"${curT===k?' selected':''}>${v}</option>`).join('')}</select></label>
   <div class="acts"><button class="btn" id="pX">Để sau</button><button class="btn primary" id="pOk">Lưu</button></div>`);
   $('#pX').onclick=closeModal;
   $('#pOk').onclick=async()=>{const nick=$('#pNick').value.trim(),team=$('#pTeam').value;if(!nick){toast('Nhập tên gọi trước.');return}
-    try{const data=Object.assign({},m,{nick,team,since:m.since||new Date().toISOString()});await db.doc('members/'+me).set(data);members[me]=data;closeModal();toast('Đã lưu hồ sơ');view=TEAM_HOME[team]||'list';rerender()}
+    try{const data=Object.assign({},m,{nick,requestedTeam:team,since:m.since||new Date().toISOString()});delete data.team;await db.doc('members/'+me).set(data);members[me]=data;
+      if(canManage&&!teamOf(me)){try{await db.doc('roles/'+me).set({team,by:me,at:new Date().toISOString()});roles[me]={team}}catch(e){}}
+      closeModal();toast(teamOf(me)===team||canManage?'Đã lưu hồ sơ':'Đã gửi, chờ quản lý duyệt bộ phận');if(teamOf(me))view=TEAM_HOME[teamOf(me)]||'list';rerender()}
     catch(e){toast(['permission_denied','invalid_argument','not_granted'].includes(e.code)?'Tài khoản của bạn chỉ có quyền xem. Nhờ anh Phát vào Share đổi bạn sang quyền Contributor.':'Chưa lưu được: '+(e.message||e.code),6000)}}
 }
 
@@ -292,14 +305,18 @@ function counts(){const a=orders.filter(isActive);
     debt:orders.filter(o=>o.status==='Đã giao'&&remain(o)>0).length,
     urgent:a.filter(o=>['red','late'].includes(urg(o))).length}}
 function renderTabs(){const nav=$('#tabs');if(!db){nav.hidden=true;return}nav.hidden=false;const c=counts();
-  const T=[['list','Đơn hàng',c.urgent,c.urgent>0],['design','Thiết kế',c.design+c.review,c.design>0],['production','Sản xuất',c.prod,false],['money','Giao & thu tiền',c.ready+c.debt,c.ready>0]];
-  if(canManage)T.push(['revenue','Doanh thu',0,false]);T.push(['team','Nhân sự',0,false]);
+  const P=perm();const pend=Object.keys(members).filter(id=>!teamOf(id)&&members[id].requestedTeam).length;
+  const ALL={list:['Đơn hàng',c.urgent,c.urgent>0],design:['Thiết kế',c.design+(P.approve?c.review:0),c.design>0],production:['Sản xuất',c.prod,false],money:['Giao & thu tiền',c.ready+c.debt,c.ready>0],revenue:['Doanh thu',0,false],team:['Nhân sự',canManage?pend:0,canManage&&pend>0]};
+  const T=P.tabs.map(k=>[k].concat(ALL[k]));
   const v=view==='form'?'list':view;
   nav.innerHTML=T.map(([k,l,n,hot])=>`<button class="tab${hot?' hot':''}" data-v="${k}"${v===k?' aria-current="page"':''}>${l}${n?`<span class="cnt">${n}</span>`:''}</button>`).join('');
   nav.querySelectorAll('.tab').forEach(b=>b.onclick=()=>go(b.dataset.v))}
 function go(v){if(view==='form'&&mode!=='view'&&JSON.stringify(cur)!==JSON.stringify(orig)){confirmLeave(()=>{view=v;mode='view';cur=null;rerender()});return}view=v;mode='view';cur=null;rerender();window.scrollTo(0,0)}
 function confirmLeave(ok){showModal(`<h2>Bỏ thay đổi chưa lưu?</h2><p>Đơn đang sửa chưa được lưu.</p><div class="acts"><button class="btn" id="cNo">Ở lại</button><button class="btn danger" id="cYes">Bỏ thay đổi</button></div>`);$('#cNo').onclick=closeModal;$('#cYes').onclick=()=>{closeModal();ok()}}
 function rerender(){renderTabs();renderWho();$('#bar').hidden=view!=='form';
+  const P=perm();
+  if(P.pending){app.innerHTML=`<div class="empty"><h3>Chưa có quyền xem đơn</h3><p>${members[me]?'Quản lý đang duyệt bộ phận của bạn.':'Bấm “Chọn bộ phận” ở góc trên để bắt đầu.'}</p></div>`;$('#bar').hidden=true;return}
+  if(view!=='form'&&!P.tabs.includes(view))view=P.tabs[0];
   if(view==='list')renderList();else if(view==='design')renderDesign();else if(view==='production')renderProd();else if(view==='money')renderMoney();else if(view==='revenue')renderRevenue();else if(view==='team')renderTeam();else if(view==='form'){if(mode==='view')renderForm()}}
 
 /* ================= danh sách đơn ================= */
@@ -308,24 +325,25 @@ function cardHTML(o,extra=''){const d=daysTo(o.deliveryDate);const u=urg(o);
   return `<button class="card" data-code="${esc(o.code)}" style="${tone(o.status)}">
    <div style="min-width:0"><div><span class="code">${esc(o.code)}</span> · <span class="cust">${esc(o.customer.name||'(chưa có tên khách)')}</span></div>
    <div class="meta"><span>${esc(productLine(o)||'—')}</span><span>${fmt(qtyOf(o))} áo</span>${due}<span>Sale: ${esc(nameOf(o.salesId))}</span></div>${extra}</div>
-   <div class="right"><span class="pill">${esc(o.status)}</span><span class="money">${vnd(total(o))}</span>${remain(o)>0&&o.status!=='Hủy'?`<small class="hint">còn thu ${vnd(remain(o))}</small>`:''}</div></button>`}
+   <div class="right"><span class="pill">${esc(o.status)}</span>${perm().money?`<span class="money">${vnd(total(o))}</span>${remain(o)>0&&o.status!=='Hủy'?`<small class="hint">còn thu ${vnd(remain(o))}</small>`:''}`:''}</div></button>`}
 function bindCards(root){root.querySelectorAll('.card[data-code]').forEach(b=>b.onclick=()=>{const o=orders.find(x=>x.code===b.dataset.code);if(o)openForm(o,'view')})}
 function renderList(){
   const c=counts();const debt=orders.filter(o=>['Đã giao'].includes(o.status)||isActive(o)).reduce((s,o)=>s+Math.max(0,remain(o)),0);
   const F={work:['Đang làm',o=>isActive(o)],urgent:['Gấp / trễ',o=>['red','late'].includes(urg(o))],review:['Chờ khách duyệt mẫu',o=>o.status==='Chờ duyệt mẫu'],prod:['Đang sản xuất',o=>o.status==='Đang sản xuất'],ready:['Sẵn sàng giao',o=>o.status==='Sẵn sàng giao'],debt:['Đã giao, còn nợ',o=>o.status==='Đã giao'],done:['Hoàn tất',o=>o.status==='Hoàn tất'],cancel:['Hủy',o=>o.status==='Hủy'],all:['Tất cả',()=>true]};
+  const P=perm();if(!P.money){delete F.debt;if(filter==='debt')filter='work'}
   const qq=q.trim().toLowerCase();
-  const list=orders.filter(F[filter][1]).filter(o=>!qq||[o.code,o.customer.name,o.customer.contact,o.customer.phone,productLine(o),nameOf(o.salesId)].join(' ').toLowerCase().includes(qq));
+  const list=orders.filter(F[filter][1]).filter(o=>!qq||[o.code,o.customer.name,P.contact?o.customer.contact:'',P.contact?o.customer.phone:'',productLine(o),nameOf(o.salesId)].join(' ').toLowerCase().includes(qq));
   if(filter==='work'||filter==='urgent')list.sort((a,b)=>(a.deliveryDate||'9999')<(b.deliveryDate||'9999')?-1:1);
   app.innerHTML=`<div class="stats">
     <div class="stat"><b>${c.work}</b><small>Đơn đang làm</small></div>
     <div class="stat${c.urgent?' alert':''}"><b>${c.urgent}</b><small>Gấp ≤ 2 ngày / trễ hẹn</small></div>
     <div class="stat"><b>${c.review}</b><small>Chờ khách duyệt mẫu</small></div>
-    <div class="stat"><b>${vnd(debt)}</b><small>Còn phải thu (đơn mở)</small></div></div>
-   <div class="filters"><input type="search" id="q" placeholder="Tìm mã đơn, tên khách, SĐT, sản phẩm…" value="${esc(q)}"><button class="btn primary" id="newBtn">+ Đơn mới</button></div>
+    ${P.money?`<div class="stat"><b>${vnd(debt)}</b><small>Còn phải thu (đơn mở)</small></div>`:`<div class="stat"><b>${c.prod}</b><small>Đang sản xuất</small></div>`}</div>
+   <div class="filters"><input type="search" id="q" placeholder="Tìm mã đơn, tên khách, sản phẩm…" value="${esc(q)}">${P.edit?'<button class="btn primary" id="newBtn">+ Đơn mới</button>':''}</div>
    <div class="fchips">${Object.entries(F).map(([k,[l]])=>`<button class="fchip" data-f="${k}" aria-pressed="${filter===k}">${l}</button>`).join('')}</div>
    <div class="list" id="olist">${!loaded?'<div class="empty"><span class="spin"></span> Đang tải đơn…</div>':list.length?list.map(o=>cardHTML(o)).join(''):`<div class="empty"><h3>${orders.length?'Không có đơn phù hợp':'Chưa có đơn nào'}</h3><p>${orders.length?'Đổi bộ lọc hoặc từ khóa tìm.':'Bấm “+ Đơn mới” để nhập đơn đầu tiên.'}</p></div>`}</div>`;
   const qi=$('#q');qi.oninput=()=>{q=qi.value;const p=qi.selectionStart;renderList();const n=$('#q');n.focus();n.setSelectionRange(p,p)};
-  $('#newBtn').onclick=()=>openForm(null,'new');
+  const nbt=$('#newBtn');if(nbt)nbt.onclick=()=>openForm(null,'new');
   $$('.fchip').forEach(b=>b.onclick=()=>{filter=b.dataset.f;renderList()});
   bindCards(app);
 }
@@ -334,16 +352,20 @@ function renderList(){
 function openForm(o,m){mode=m;view='form';cur=o?clone(normalize(o)):blank();if(m==='new'){cur.salesId=me||'';}orig=clone(cur);renderTabs();renderForm();window.scrollTo(0,0)}
 const editing=()=>mode==='new'||mode==='edit';
 function opts(list,val){return list.map(x=>`<option${x===val?' selected':''}>${esc(x)}</option>`).join('')}
-function salesOpts(sel){const ids=Object.keys(members).filter(id=>['sale','manager'].includes(members[id].team));if(sel&&!ids.includes(sel))ids.push(sel);return '<option value="">— chọn —</option>'+ids.map(id=>`<option value="${esc(id)}"${id===sel?' selected':''}>${esc(nameOf(id))}</option>`).join('')}
+function salesOpts(sel){const ids=Object.keys(members).filter(id=>['sale','manager'].includes(teamOf(id)));if(sel&&!ids.includes(sel))ids.push(sel);return '<option value="">— chọn —</option>'+ids.map(id=>`<option value="${esc(id)}"${id===sel?' selected':''}>${esc(nameOf(id))}</option>`).join('')}
 function renderForm(){
   const o=cur;const ed=editing();$('#bar').hidden=false;
-  const d=o.design;const P=o.prod;
+  const PM=perm();
   app.innerHTML=`<div class="formhead"><button class="btn sm" id="backBtn">← Danh sách</button>
     <span class="codebig">${o.code?esc(o.code):'Đơn mới'}</span>${o.code?`<span class="pill" style="${tone(o.status)}">${esc(o.status)}</span>`:''}
     ${o.createdAt?`<span class="hint">tạo ${dt(o.createdAt)} · ${esc(nameOf(o.createdBy))}</span>`:''}</div>
   ${o.code&&!ed?progressHTML(o):''}
   <fieldset id="fs"${ed?'':' disabled'}>
-  <section class="sec"><h2>Khách hàng</h2><div class="grid">
+  ${PM.contact?'':`<section class="sec"><h2>Thông tin đơn</h2><div class="grid">
+    <label class="f full"><span>Khách hàng</span><input value="${esc(o.customer.name)}" disabled></label>
+    <label class="f"><span>Ngày giao khách</span><input value="${esc(dmy(o.deliveryDate))}" disabled></label>
+    <label class="f"><span>Sale phụ trách</span><input value="${esc(nameOf(o.salesId))}" disabled></label></div></section>`}
+  ${PM.contact?`<section class="sec"><h2>Khách hàng</h2><div class="grid">
     <label class="f full"><span>Tên khách / công ty / đội <i>*</i></span><input id="cName" value="${esc(o.customer.name)}" placeholder="VD: Công ty CP Thủy sản Bình Định"></label>
     <label class="f"><span>Người liên hệ</span><input id="cContact" value="${esc(o.customer.contact)}"></label>
     <label class="f"><span>Số điện thoại <i>*</i></span><input type="tel" id="cPhone" value="${esc(o.customer.phone)}" inputmode="tel"></label>
@@ -352,7 +374,7 @@ function renderForm(){
     <label class="f"><span>Nguồn khách</span><select id="oChannel"><option value="">— chọn —</option>${opts(CHANNELS,o.channel)}</select></label>
     <label class="f"><span>Sale phụ trách</span><select id="oSales">${salesOpts(o.salesId)}</select></label>
     <label class="f"><span>Ngày hẹn giao <i>*</i></span><input id="oDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" value="${esc(dmy(o.deliveryDate))}"></label>
-  </div></section>
+  </div></section>`:''}
 
   <section class="sec"><h2>Sản phẩm &amp; size <small>nhập số lượng từng size</small></h2>
     <div id="items"></div>
@@ -380,7 +402,7 @@ function renderForm(){
     <div id="nameSum" class="hint" style="margin-top:6px"></div>
   </section>
 
-  <section class="sec"><h2>Giá &amp; thanh toán</h2><div class="grid three">
+  ${PM.money?`<section class="sec"><h2>Giá &amp; thanh toán</h2><div class="grid three">
     <label class="f"><span>Giảm giá (đ)</span><input type="number" id="oDisc" min="0" value="${num(o.discount)||''}"></label>
     <label class="f"><span>VAT (%)</span><input type="number" id="oVat" min="0" max="20" value="${num(o.vat)||''}" placeholder="0 nếu không xuất HĐ"></label>
     <label class="f"><span>Phí giao (đ)</span><input type="number" id="oShipFee" min="0" value="${num(o.shipFee)||''}"></label>
@@ -388,10 +410,10 @@ function renderForm(){
     <label class="f"><span>Cách giao dự kiến</span><select id="oShip"><option value="">— chọn —</option>${opts(SHIPS,o.shipMethod)}</select></label>
   </div><div class="totals" id="totals"></div>
   ${o.payments.length?`<div style="margin-top:10px" class="hint">Đã thu thêm: ${o.payments.map(p=>`${dmy(p.at)} ${vnd(p.amount)} (${esc(p.method||'')})`).join(' · ')}</div>`:''}
-  </section>
+  </section>`:''}
 
   <section class="sec"><h2>Ghi chú</h2><div class="grid">
-    <label class="f"><span>Ghi chú cho sale / khách</span><textarea id="oNote">${esc(o.note)}</textarea></label>
+    ${PM.full?`<label class="f"><span>Ghi chú cho sale / khách</span><textarea id="oNote">${esc(o.note)}</textarea></label>`:''}
     <label class="f"><span>Ghi chú cho xưởng (in lên lệnh SX)</span><textarea id="oProdNote">${esc(o.prodNote)}</textarea></label>
   </div></section>
   </fieldset>
@@ -412,7 +434,7 @@ function renderItems(){const box=$('#items');const ed=editing();
     <label class="f"><span>Loại áo</span><select data-k="product">${opts(PRODUCTS,it.product)}</select></label>
     <label class="f"><span>Chất liệu vải</span><select data-k="fabric">${opts(FABRICS,it.fabric)}</select></label>
     <label class="f"><span>Màu áo / phối màu</span><input data-k="color" value="${esc(it.color)}" placeholder="VD: Xanh navy, bo cổ trắng"></label>
-    <label class="f"><span>Đơn giá (đ/áo)</span><input type="number" data-k="price" min="0" value="${num(it.price)||''}"></label>
+    ${perm().money?`<label class="f"><span>Đơn giá (đ/áo)</span><input type="number" data-k="price" min="0" value="${num(it.price)||''}"></label>`:''}
     <label class="f"><span>SL size khác</span><input type="number" data-k="extraQty" min="0" value="${num(it.extraQty)||''}"></label>
     <label class="f"><span>Ghi chú size khác / form</span><input data-k="sizeNote" value="${esc(it.sizeNote)}" placeholder="VD: 2 áo 5XL, form nữ…"></label>
    </div>
@@ -553,7 +575,13 @@ async function act(fn,ok){try{await fn();if(ok)toast(ok);closeModal()}catch(e){t
 function renderBar(){const b=$('#barIn');const o=cur;
   if(editing()){b.innerHTML=`<button class="btn" id="bCancel">Hủy bỏ</button><span class="grow"></span><span class="hint">${fmt(qtyOf(o))} áo · ${vnd(total(o))}</span><button class="btn primary" id="bSave"${saving?' disabled':''}>${saving?'Đang lưu…':mode==='new'?'Lưu đơn':'Lưu thay đổi'}</button>`;
     $('#bCancel').onclick=()=>{if(mode==='new')go('list');else{cur=clone(orig);mode='view';renderForm()}};$('#bSave').onclick=mode==='new'?saveNew:saveEdit;return}
-  const A=[];
+  const A=[];const PM=perm();
+  if(!PM.full){
+    if(PM.design&&o.design&&['working','redo'].includes(o.design.state))A.push(['bUp','Nộp mẫu V'+((o.design.versions||[]).length+1),'primary']);
+    if(PM.prod&&o.status==='Đang sản xuất'&&o.prod&&o.prod.stage<STAGES.length)A.push(['bStage','✓ Xong “'+STAGES[o.prod.stage]+'”','primary']);
+    A.push(['bPdf','Tải lệnh SX (PDF)','']);
+    b.innerHTML=A.map(([id,l,c])=>`<button class="btn ${c}" id="${id}">${esc(l)}</button>`).join('');
+    const on=(id,f)=>{const e=$('#'+id);if(e)e.onclick=f};on('bUp',()=>openUpload(o));on('bStage',()=>stageDone(o));on('bPdf',()=>exportPdf(o));return}
   if(isActive(o)||o.status==='Tạm dừng')A.push(['bEdit','Sửa đơn','']);
   if(isActive(o)&&!o.design)A.push(['bDesign','Gửi thiết kế','']);
   if(isActive(o)&&o.design&&o.design.state==='review')A.push(['bApprove','Khách chốt mẫu','primary'],['bRedo','Khách yêu cầu sửa','']);
@@ -577,11 +605,11 @@ function designSecHTML(o){const d=o.design;
   </section>`}
 function histSecHTML(o){return `<section class="sec"><h2>Lịch sử &amp; trao đổi</h2>
   <div class="qact" style="margin-bottom:10px"><input id="hNote" placeholder="Ghi chú nội bộ (VD: khách gọi dời ngày, xưởng báo thiếu vải…)" style="flex:1 1 240px"><button class="btn sm" id="hAdd">Ghi lại</button></div>
-  <ul class="hist">${o.history.slice().reverse().map(h=>`<li><time>${dt(h.at)}</time><span>${esc(h.text)} · <b>${esc(nameOf(h.by))}</b></span></li>`).join('')}</ul></section>`}
+  <ul class="hist">${o.history.slice().reverse().map(h=>`<li><time>${dt(h.at)}</time><span>${esc(perm().money?h.text:maskMoney(h.text))} · <b>${esc(nameOf(h.by))}</b></span></li>`).join('')}</ul></section>`}
 function bindViewExtras(){app.querySelectorAll('img[data-zoom]').forEach(im=>im.onclick=()=>zoom(im.src));
   const s=$('#dSend');if(s)s.onclick=()=>openSendDesign(cur);
   $('#hAdd').onclick=async()=>{const t=$('#hNote').value.trim();if(!t)return;await act(()=>patch(cur,{},'💬 '+t),'Đã ghi')}}
-function designers(){return Object.keys(members).filter(id=>members[id].team==='design')}
+function designers(){return Object.keys(members).filter(id=>teamOf(id)==='design')}
 function openSendDesign(o){showModal(`<h2>Gửi thiết kế đơn ${esc(o.code)}</h2>
   <label class="f"><span>Người thiết kế</span><select id="dWho"><option value="">— ai rảnh làm —</option>${designers().map(id=>`<option value="${esc(id)}">${esc(nameOf(id))}</option>`).join('')}</select></label>
   <label class="f"><span>Yêu cầu thiết kế</span><textarea id="dReq" placeholder="VD: logo ngực trái 8cm, chữ sau lưng tên công ty, phối màu theo nhận diện…"></textarea></label>
@@ -605,7 +633,7 @@ function renderDesign(){const act_=orders.filter(o=>isActive(o)&&o.design);
   const rev=act_.filter(o=>o.design.state==='review');
   const block=(o,btns)=>`<div class="qcard">${cardHTML(o,`<div class="hint" style="margin-top:4px">${esc(dLabel(o.design))}${o.design.assignee?' · '+esc(nameOf(o.design.assignee)):''}${o.design.request?' · '+esc(o.design.request):''}${o.design.state==='redo'?' · <b style="color:var(--bad)">'+esc((o.design.versions.slice(-1)[0]||{}).feedback||'')+'</b>':''}</div>`)}<div class="qact">${btns}</div></div>`;
   app.innerHTML=`<h2 style="font-size:20px;margin-bottom:10px">Cần thiết kế (${todo.length})</h2><div class="list">${todo.length?todo.map(o=>block(o,`<button class="btn sm primary" data-up="${esc(o.code)}">Nộp mẫu V${(o.design.versions||[]).length+1}</button>`)).join(''):'<div class="empty"><h3>Không còn mẫu cần làm</h3><p>Đơn sale gửi thiết kế sẽ hiện ở đây.</p></div>'}</div>
-   <h2 style="font-size:20px;margin:18px 0 10px">Chờ khách duyệt (${rev.length})</h2><div class="list">${rev.length?rev.map(o=>block(o,`<button class="btn sm primary" data-ok="${esc(o.code)}">Khách chốt</button><button class="btn sm" data-redo="${esc(o.code)}">Khách yêu cầu sửa</button>`)).join(''):'<div class="empty">Không có mẫu đang chờ khách.</div>'}</div>`;
+   <h2 style="font-size:20px;margin:18px 0 10px">Chờ khách duyệt (${rev.length})</h2><div class="list">${rev.length?rev.map(o=>block(o,perm().approve?`<button class="btn sm primary" data-ok="${esc(o.code)}">Khách chốt</button><button class="btn sm" data-redo="${esc(o.code)}">Khách yêu cầu sửa</button>`:'<span class="hint">Sale đang gửi khách duyệt</span>')).join(''):'<div class="empty">Không có mẫu đang chờ khách.</div>'}</div>`;
   bindCards(app);const F=c=>orders.find(x=>x.code===c);
   app.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>openUpload(F(b.dataset.up)));
   app.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>openApprove(F(b.dataset.ok)));
@@ -653,7 +681,7 @@ function openPay(o){showModal(`<h2>Thu tiền đơn ${esc(o.code)}</h2><p>Còn p
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const a=num($('#yA').value);if(a<=0){toast('Nhập số tiền.');return}const pays=o.payments.concat([{at:nowISO(),by:me||'',amount:a,method:$('#yM').value,note:$('#yN').value.trim()}]);
     const rem=total(o)-num(o.deposit)-pays.reduce((s,p)=>s+num(p.amount),0);const upd={payments:pays};if(rem<=0&&o.status==='Đã giao'){upd.status='Hoàn tất';upd.completedAt=nowISO()}
     act(()=>patch(o,upd,`Thu ${vnd(a)} (${$('#yM').value})${rem>0?', còn '+vnd(rem):', đã đủ'}`),'Đã ghi nhận thu tiền')}}
-function renderMoney(){const ready=orders.filter(o=>o.status==='Sẵn sàng giao').sort((a,b)=>(a.deliveryDate||'9')<(b.deliveryDate||'9')?-1:1);
+function renderMoney(){if(!perm().money){app.innerHTML='<div class="empty"><h3>Mục này dành cho Sale, Kế toán, Quản lý</h3></div>';return}const ready=orders.filter(o=>o.status==='Sẵn sàng giao').sort((a,b)=>(a.deliveryDate||'9')<(b.deliveryDate||'9')?-1:1);
   const debt=orders.filter(o=>o.status==='Đã giao'&&remain(o)>0).sort((a,b)=>((a.delivery&&a.delivery.at)||'')<((b.delivery&&b.delivery.at)||'')?-1:1);
   const sum=debt.reduce((s,o)=>s+remain(o),0);
   app.innerHTML=`<h2 style="font-size:20px;margin-bottom:10px">Sẵn sàng giao (${ready.length})</h2><div class="list">${ready.length?ready.map(o=>`<div class="qcard">${cardHTML(o)}<div class="qact"><button class="btn sm primary" data-dv="${esc(o.code)}">Giao hàng</button></div></div>`).join(''):'<div class="empty">Chưa có đơn nào chờ giao.</div>'}</div>
@@ -688,12 +716,23 @@ function renderRevenue(){if(!canManage){app.innerHTML='<div class="empty"><h3>Ch
   $('#yy').onchange=e=>{revYear=+e.target.value;renderRevenue()}}
 
 /* ================= nhân sự ================= */
-function renderTeam(){const ids=Object.keys(members);
-  app.innerHTML=`<section class="sec"><h2>Nhân sự trong app <small>mỗi người tự chọn bộ phận khi mở lần đầu${canManage?'; quản lý đổi được cho mọi người':''}</small></h2>
-  <div class="tblwrap"><table><thead><tr><th>Tên gọi</th><th>Bộ phận</th><th>Đơn đang phụ trách</th></tr></thead><tbody>${ids.map(id=>{const m=members[id];const n=orders.filter(o=>o.salesId===id&&isActive(o)).length;
-   return `<tr><td>${esc(nameOf(id))}${id===me?' (bạn)':''}</td><td>${canManage&&id!==me?`<select data-tm="${esc(id)}">${Object.entries(TEAMS).map(([k,v])=>`<option value="${k}"${m.team===k?' selected':''}>${v}</option>`).join('')}</select>`:esc(TEAMS[m.team]||'—')}</td><td class="num">${n||''}</td></tr>`}).join('')||'<tr><td colspan="3" class="hint">Chưa có ai. Chia sẻ trang cho nhân viên (quyền Contributor), họ mở lên sẽ được hỏi bộ phận.</td></tr>'}</tbody></table></div>
-  <p class="hint">Cách thêm người: bấm Share của trang → mời email nhân viên với quyền <b>Contributor</b> (tạo/sửa đơn, tải ảnh). Quyền <b>Editor</b> dành cho quản lý (xem doanh thu, đổi bộ phận người khác).</p></section>`;
-  app.querySelectorAll('[data-tm]').forEach(s=>s.onchange=async()=>{try{await db.doc('members/'+s.dataset.tm).update({team:s.value});toast('Đã đổi bộ phận')}catch(e){toast('Chưa đổi được: '+(e.message||e.code))}})}
+function renderTeam(){const ids=Object.keys(members);const P=perm();
+  const sel=(id,val)=>`<select data-tm="${esc(id)}"><option value="">— chưa duyệt —</option>${Object.entries(TEAMS).map(([k,v])=>`<option value="${k}"${val===k?' selected':''}>${v}</option>`).join('')}</select>`;
+  const rows=ids.sort((a,b)=>(teamOf(a)?1:0)-(teamOf(b)?1:0)).map(id=>{const m=members[id];const t=teamOf(id);const rq=m.requestedTeam||m.team||'';
+    const st=t?`<span class="pill" style="${tone('Hoàn tất')}">${esc(TEAMS[t])}</span>`:`<span class="pill" style="${tone('Chờ duyệt mẫu')}">Chờ duyệt${rq?' · xin '+esc(TEAMS[rq]||rq):''}</span>`;
+    return `<tr><td>${esc(nameOf(id))}${id===me?' (bạn)':''}</td><td>${st}</td>${canManage?`<td>${sel(id,t||'')}${!t&&rq?` <button class="btn sm primary" data-ok="${esc(id)}" data-t="${esc(rq)}">Duyệt ${esc(TEAMS[rq]||rq)}</button>`:''}</td>`:''}</tr>`}).join('');
+  app.innerHTML=`<section class="sec"><h2>Nhân sự &amp; quyền xem</h2>
+  <div class="tblwrap"><table><thead><tr><th>Tên gọi</th><th>Bộ phận</th>${canManage?'<th>Duyệt / đổi bộ phận</th>':''}</tr></thead><tbody>${rows||`<tr><td colspan="3" class="hint">Chưa có ai. Chia sẻ trang cho nhân viên, họ mở lên sẽ được hỏi bộ phận.</td></tr>`}</tbody></table></div></section>
+  <section class="sec"><h2>Mỗi bộ phận thấy gì</h2><div class="tblwrap"><table><thead><tr><th>Bộ phận</th><th>Thấy</th><th>Không thấy</th></tr></thead><tbody>
+   <tr><td>Quản lý, Sale, Kế toán</td><td>Toàn bộ đơn: khách, SĐT, địa chỉ, giá, thanh toán, công nợ</td><td>Doanh thu (chỉ người có quyền Editor)</td></tr>
+   <tr><td>Thiết kế</td><td>Tab Thiết kế, sản phẩm, size, in/thêu, logo, danh sách tên, ghi chú xưởng</td><td>SĐT, địa chỉ, MST, giá, tiền cọc, thu tiền, ghi chú sale</td></tr>
+   <tr><td>Sản xuất</td><td>Tab Sản xuất, sản phẩm, size, in/thêu, mẫu đã chốt, danh sách tên, lệnh SX</td><td>SĐT, địa chỉ, MST, giá, tiền cọc, thu tiền, ghi chú sale</td></tr>
+   <tr><td>Chưa được duyệt</td><td>Chỉ thấy thông báo chờ duyệt</td><td>Toàn bộ đơn hàng</td></tr></tbody></table></div>
+  <p class="hint">Thêm người: bấm Share → mời email với quyền <b>Contributor</b>. Người đó mở app, chọn bộ phận, rồi quản lý duyệt ở bảng trên. Quyền <b>Editor</b> (quản lý) luôn thấy toàn bộ và xem được doanh thu.</p></section>`;
+  const setRole=async(id,t)=>{try{if(t)await db.doc('roles/'+id).set({team:t,by:me||'',at:nowISO()});else await db.doc('roles/'+id).delete();toast(t?'Đã duyệt: '+nameOf(id)+' · '+TEAMS[t]:'Đã bỏ quyền của '+nameOf(id))}catch(e){toast('Chưa lưu được: '+(e.message||e.code),5000)}};
+  app.querySelectorAll('[data-tm]').forEach(s=>s.onchange=()=>setRole(s.dataset.tm,s.value));
+  app.querySelectorAll('[data-ok]').forEach(b=>b.onclick=()=>setRole(b.dataset.ok,b.dataset.t));
+}
 
 /* ================= lệnh sản xuất PDF ================= */
 const _ld={};function loadJS(src){if(_ld[src])return _ld[src];return _ld[src]=new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>{delete _ld[src];rej(new Error('Không tải được thư viện PDF'))};document.head.appendChild(s)})}
