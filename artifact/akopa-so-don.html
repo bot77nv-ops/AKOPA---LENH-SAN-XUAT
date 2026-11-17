@@ -450,19 +450,20 @@ function openPet(o){const t=Object.assign({state:'todo',files:[]},o.petTask||{})
   <p class="hint">${o.deco.map(d=>esc(d.method+' – '+d.position+(d.detail?': '+d.detail:''))).join(' · ')||'Chưa có thông tin in/thêu'} · ${fmt(qtyOf(o))} áo${o.names.filter(r=>r.name||r.number).length?' · có danh sách in tên/số':''}</p>
   <div class="f"><span class="flabel">File in đã dàn trang (PDF / PNG / SVG)</span><div class="thumbs" id="petF"></div></div>
   <label class="f"><span>Link file gốc (.AI / .CDR) nếu có</span><input id="petLink" value="${esc(t.link||'')}" placeholder="Google Drive / Zalo…"></label>
-  <div class="grid"><label class="f"><span>Xưởng in PET</span><input id="petV" list="petVL" value="${esc(t.vendor||'')}"></label>
+  <div class="grid"><label class="f"><span>Xưởng in PET</span><select id="petV"><option value="">— thiết kế chọn xưởng in —</option>${optList('petVendor',t.vendor).map(v=>`<option${v===t.vendor?' selected':''}>${esc(v)}</option>`).join('')}<option value="__new">➕ Xưởng khác – tự nhập…</option></select></label>
   <div class="f"><span class="flabel">Cần hàng in trước</span>${dateBoxHTML('petEta',t.eta||'')}</div></div>
   <datalist id="petVL">${optList('petVendor').map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
   <label class="f"><span>Trạng thái</span><select id="petS">${Object.entries(PET_ST).map(([k,v])=>`<option value="${k}"${t.state===k?' selected':''}>${v}</option>`).join('')}</select></label>
   <label class="f"><span>Ghi chú gửi xưởng in</span><input id="petN" value="${esc(t.note||'')}" placeholder="VD: in nền trắng, kích thước theo file"></label>
   <div class="qact"><button type="button" class="btn sm" id="petCp">Copy gửi Zalo</button><button type="button" class="btn sm" id="petPdf">Xuất phiếu in PET (PDF)</button></div>
   <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Lưu</button></div>`);
-  billZone('petF',tmp.files);let eta=t.eta||'';bindDate('petEta',iso=>eta=iso);
+  billZone('petF',tmp.files);let eta=t.eta||'';
+  $('#petV').onchange=e=>{if(e.target.value==='__new'){const i=document.createElement('input');i.id='petV';i.placeholder='Tên xưởng in PET mới';i.maxLength=60;e.target.replaceWith(i);i.focus()}};bindDate('petEta',iso=>eta=iso);
   const collect=()=>Object.assign({},t,{files:tmp.files,link:$('#petLink').value.trim(),vendor:$('#petV').value.trim(),eta,state:$('#petS').value,note:$('#petN').value.trim()});
   $('#petCp').onclick=()=>{navigator.clipboard.writeText(petText(Object.assign({},o,{petTask:collect()}))).then(()=>toast('Đã copy — dán gửi xưởng in qua Zalo')).catch(()=>toast('Trình duyệt chặn copy. Dùng nút Xuất phiếu PDF.'))};
   $('#petPdf').onclick=()=>exportPet(Object.assign({},o,{petTask:collect()}));
   $('#mX').onclick=closeModal;
-  $('#mOk').onclick=async()=>{const n=collect();if(n.state!=='todo'&&!n.files.length&&!n.link){toast('Thêm file in hoặc link file trước khi báo đã gửi.',4500);return}
+  $('#mOk').onclick=async()=>{const n=collect();if(n.state!=='todo'&&!n.files.length&&!n.link){toast('Thêm file in hoặc link file trước khi báo đã gửi.',4500);return}if(n.state!=='todo'&&!n.vendor){toast('Chọn xưởng in PET trước khi báo đã gửi.',4500);return}
     if(n.vendor&&!optList('petVendor').some(y=>lc(y)===lc(n.vendor))){customOpts.petVendor.push(n.vendor);try{await db.doc('options/petVendor~'+slugOpt(n.vendor)).set({type:'petVendor',label:n.vendor,by:me||'',at:nowISO()})}catch(e){}}
     if(n.state!==t.state){if(n.state==='sent'){n.sentAt=nowISO();n.sentBy=me||''}if(n.state==='received'){n.receivedAt=nowISO();n.receivedBy=me||''}}
     act(()=>patch(o,{petTask:n},n.state!==t.state?`In PET: ${PET_ST[n.state]}${n.vendor?' ('+n.vendor+')':''}`:'Cập nhật file in PET'),'Đã lưu')}}
@@ -1029,15 +1030,14 @@ function openToProd(o){const warns=[];if(!designOk(o))warns.push(o.design?'Mẫu
   <div class="f"><span class="flabel">Nguồn hàng từng mẫu áo</span>${o.items.map((it,i)=>`<label class="f"><span style="text-transform:none;letter-spacing:0">Mẫu ${i+1}: ${esc(it.product)}${it.color?' '+esc(it.color):''} · ${fmt(itemQty(it))} áo</span><select data-sup="${it.id}">${Object.entries(SUPPLY).map(([k,v])=>`<option value="${k}"${(it.supply||'')===k?' selected':''}>${v}</option>`).join('')}</select></label>`).join('')}
   <p class="hint" style="margin:0">Mua áo có sẵn / Đặt may OEM → kế toán nhận việc ở tab <b>Mua hàng</b> trước khi xưởng in.</p></div>
   <div class="f"><span class="flabel">Hẹn xưởng xong</span>${dateBoxHTML('pDue','','Nên trước ngày giao khách 1–2 ngày')}</div>
-  <label class="check"><input type="checkbox" id="pPet"${needPet(o)?' checked':''}> <span>Cần làm <b>file in PET</b> gửi xưởng in gia công (thiết kế làm)</span></label>
-  <label class="f" id="pPetW"><span>Xưởng in PET</span><select id="pPetV">${optList('petVendor').map(v=>`<option>${esc(v)}</option>`).join('')}</select></label>
+  <label class="check"><input type="checkbox" id="pPet"${needPet(o)?' checked':''}> <span>Cần làm <b>file in PET</b> gửi xưởng in gia công (thiết kế làm file &amp; chọn xưởng in)</span></label>
   ${needWaive?`<label class="check"><input type="checkbox" id="pWaive"> <span>Quản lý duyệt sản xuất khi <b>chưa nhận cọc</b></span></label><label class="f"><span>Lý do</span><input id="pWhy" placeholder="VD: khách quen, cọc sau khi nhận mẫu"></label>`:''}
   <div class="acts"><button class="btn" id="mX">Đóng</button><button class="btn primary" id="mOk">Chuyển sản xuất</button></div>`);
   let pDueISO='';bindDate('pDue',iso=>pDueISO=iso);
   $('#mX').onclick=closeModal;$('#mOk').onclick=()=>{const sup={};document.querySelectorAll('[data-sup]').forEach(x=>sup[x.dataset.sup]=x.value);const items=o.items.map(it=>Object.assign({},it,{supply:sup[it.id]||it.supply||'self'}));const tmpO=Object.assign({},o,{items});const keys=buildStages(tmpO);const pm=poModes(tmpO);let extra={},why='';
     if(needWaive){if(!$('#pWaive').checked){toast('Tích ô “Quản lý duyệt sản xuất khi chưa nhận cọc” để tiếp tục.',4500);return}why=$('#pWhy').value.trim();if(!why){toast('Ghi lý do sản xuất khi chưa nhận cọc.');return}extra={depositWaive:{at:nowISO(),by:me||'',reason:why}}}
     const pur=Object.assign({},o.purchase||{});pm.forEach(m=>{if(!pur[m])pur[m]={status:'todo'}});
-    if($('#pPet').checked&&!o.petTask)extra.petTask={state:'todo',vendor:$('#pPetV').value,files:[],createdAt:nowISO(),by:me||''};
+    if($('#pPet').checked&&!o.petTask)extra.petTask={state:'todo',vendor:'',files:[],createdAt:nowISO(),by:me||''};
     act(()=>patch(o,Object.assign({items,prod:{stageKeys:keys,stage:0,due:pDueISO||parseFlex($('#pDue').value),startedAt:nowISO(),stageAt:{}},purchase:pur,status:'Đang sản xuất'},extra),'Chuyển sản xuất · '+[...new Set(items.map(i=>SUPPLY[i.supply]))].join(' + ')+(pm.length?' → kế toán '+pm.map(m=>PO_KIND[m].short).join(' & '):'')+(why?' · chưa cọc, QL duyệt: '+why:'')),'Đã chuyển sản xuất')}}
 async function stageDone(o){const P=clone(o.prod);P.stageAt=P.stageAt||{};P.stageAt[P.stage]={at:nowISO(),by:me||''};const name=SG(o)[P.stage];P.stage++;
   const upd={prod:P};if(P.stage>=SG(o).length){upd.status='Sẵn sàng giao';P.doneAt=nowISO()}
